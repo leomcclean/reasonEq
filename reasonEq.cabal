@@ -48,6 +48,8 @@ library
                      , TestRendering
                      , TestParsing
                      , WriteRead
+                     , GUI
+                     , JavaScript
                      -- in builtin
                      , StdSignature
                      , Equivalence
@@ -75,6 +77,7 @@ library
                      , filepath
                      , split
                      , nicesymbols
+                     , threepenny-gui
                      -- we need to support internal tests for some modules
                      , HUnit
                      -- , QuickCheck

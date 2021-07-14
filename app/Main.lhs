@@ -44,6 +44,7 @@ import TestRendering
 import TestParsing
 import REPL
 import Dev
+import GUI
 
 import Debug.Trace
 dbg msg x = trace (msg++show x) x
@@ -165,48 +166,44 @@ info args runargs
 
 runargs args
   = do let flags = parseArgs args
-       reqs0 <- initState flags
+       (reqs0,text) <- initState flags
        if usegui flags
-       then do putStrLn "starting GUI..."
-               gui reqs0
-       else do putStrLn "starting REPL..."
+       then do gui reqs0{ inGUIMode = True } ("starting GUI..." : text)
+       else do mapM_ putStrLn ("starting REPL..." : text)
                repl reqs0
 \end{code}
-
 
 \newpage
 \subsection{Initialising State}
 
 We assume user mode by default.
-
 \begin{code}
-initState :: CMDFlags -> IO REqState
-
+initState :: CMDFlags -> IO (REqState, [String])
 initState flags
   = case wspath flags of
       Nothing ->
         if dev flags
-        then return $ devInitState
-        else do  putStrLn "Running user mode, default initial state."
-                 (appFP,projects) <- getWorkspaces progName
-                 putStrLn ("appFP = "++appFP)
-                 putStrLn ("projects:\n"++unlines projects)
-                 (pname,projfp)
-                    <- currentWorkspace
-                         ( unlines $ fst $ writeREqState reqstate0 )
-                                     projects
-                 putStrLn ("Project Name: "++pname)
-                 putStrLn ("Project Path: "++projfp)
-                 putStrLn "Loading..."
-                 readAllState projfp
+        then return (devInitState,[""])
+        else do (appFP,projects) <- getWorkspaces progName
+                (pname,projfp) <- currentWorkspace 
+                  (unlines $ fst $ writeREqState reqstate0) projects
+                (reqs0, response) <- readAllState projfp
+                let output  =   ["Running user mode, default initial state."]
+                            ++  ["appFP = " ++ appFP]
+                            ++  ["projects:"] ++ projects
+                            ++  ["Project Name: " ++ pname]
+                            ++  ["Project Path: " ++ projfp]
+                            ++  ["Loading..."] ++ response
+                return (reqs0, output)
       Just fp ->
-        do ok <- doesDirectoryExist fp
-           if ok
-           then if dev flags
-                then return $ devInitState{ projectDir = fp }
-                else do putStrLn "Running user mode, loading project state."
-                        readAllState fp
-           else die ("invalid workspace: "++fp)
+        do  ok <- doesDirectoryExist fp
+            if ok
+            then if dev flags
+              then return (devInitState{ projectDir = fp },[""])
+              else do
+                (reqs0, response) <- readAllState fp
+                return (reqs0, ["Running user mode, loading project state."] ++ response)
+            else die ("invalid workspace: " ++ fp)
 
 reqstate0 = REqState { inDevMode = False
                      , projectDir = ""
@@ -215,20 +212,23 @@ reqstate0 = REqState { inDevMode = False
                      , logicsig = propSignature
                      , theories = noTheories
                      , currTheory = ""
-                     , liveProofs = M.empty }
+                     , liveProofs = M.empty
+                     , inGUIMode = False }
 \end{code}
 
 \newpage
 
-
 \subsection{GUI Top-Level}
 
-The GUI has yet to be developed but will probably
-use \texttt{threepenny-gui} along with the Electron browser.
+The GUI is currently in development and
+uses \texttt{threepenny-gui}, with the
+option of usage with the Electron browser.
 \begin{code}
-gui :: REqState -> IO ()
-gui reqs0 = do putStrLn "GUI not implemented, using command-line."
-               repl reqs0
+gui :: REqState -> [String] -> IO ()
+gui reqs0 wlcmt = do
+        (appFP,projects) <- getWorkspaces progName
+        workspace <- return $ ["Application Data:", appFP, "Project Folders:"] ++ projects
+        runServ 2000 reqs0 wlcmt workspace
 \end{code}
 
 \newpage
@@ -319,9 +319,9 @@ waitForReturn
        return ()
 \end{code}
 
-
 \newpage
-\subsection{Show Command }
+\subsection{Show Command}
+
 \begin{code}
 cmdShow :: REqCmdDescr
 cmdShow
@@ -358,7 +358,7 @@ shProofs = "P"
 
 -- these are not robust enough - need to check if component is present.
 showState (cmd:args) reqs
- | cmd == shProofs    =  doshow reqs $ observeCompleteProofs args reqs
+ | cmd == shProofs    =  doshow reqs $ observeCompleteProofs reqs args
  | cmd == shWork      =  showWorkspaces args reqs
  | cmd == shSig       =  doshow reqs $ observeSig reqs
  | cmd == shTheories  =  doshow reqs $ observeTheories reqs
@@ -373,7 +373,6 @@ showState _ reqs      =  doshow reqs "unknown/unimplemented 'show' option."
 doshow :: REqState -> String -> IO REqState
 doshow reqs str  =  putStrLn str >> return reqs
 
-
 showWorkspaces :: [String] -> REqState -> IO REqState
 showWorkspaces args reqs
   = do (appFP,projects) <- getWorkspaces progName
@@ -384,7 +383,6 @@ showWorkspaces args reqs
 
 \newpage
 \subsection{State Save and Restore}
-
 
 \begin{code}
 cmdSave, cmdLoad :: REqCmdDescr
@@ -425,17 +423,17 @@ saveState _ reqs  =  doshow reqs "unknown 'save' option."
 loadState [] reqs
   = do let dirfp = projectDir reqs
        putStrLn ("Reading all prover state from "++dirfp++"...")
-       reqs' <- readAllState dirfp
+       (reqs',_) <- readAllState dirfp
        putStrLn ("...done.")
        return reqs'{ inDevMode = inDevMode reqs}
 loadState [nm] reqs
   = do let dirfp = projectDir reqs
-       (nm,thry) <- readNamedTheory dirfp nm
+       (nm,thry,_) <- readNamedTheory dirfp nm
        putStrLn ("Theory '"++nm++"'read from  '"++projectDir reqs++"'.")
        return $ changed $ theories__ (replaceTheory' thry) reqs
 loadState ["new",nm] reqs
   = do let dirfp = projectDir reqs
-       (nm,thry) <- readNamedTheory dirfp nm
+       (nm,thry,_) <- readNamedTheory dirfp nm
        putStrLn ("Theory '"++nm++"'read from  '"++projectDir reqs++"'.")
        case addTheory thry $ theories reqs of
          Yes thrys' -> return $ changed $ theories_ thrys' reqs

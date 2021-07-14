@@ -95,7 +95,6 @@ hideFloatingVariables__ f r
   =  matchFilterUpdate' r{hideFloatingVariables = f $ hideFloatingVariables r}
 hideFloatingVariables_   =  hideFloatingVariables__ . const
 
-
 -- Section 3 updaters -- not exported, internal use only
 matchFilterUpdate r
   = let mfu0 = acceptAll
@@ -124,9 +123,7 @@ andIfWanted wanted newf currf ctxt mtch
  | otherwise  =  currf ctxt mtch
 \end{code}
 
-
 \subsubsection{Startup/Default Settings}
-
 
 \begin{code}
 initREqSettings
@@ -232,11 +229,9 @@ readREqSettings txts
                 , rest3 )
 \end{code}
 
-
 \subsection{Prover State Type}
 
 Here we simply aggregate the semantic equational-reasoning prover state
-
 \begin{code}
 data REqState
  = REqState {
@@ -249,6 +244,7 @@ data REqState
     , theories    ::  Theories
     , currTheory  ::  String
     , liveProofs  ::  LiveProofs
+    , inGUIMode :: Bool -- true if using the GUI
     }
 
 projectDir__ f r = r{projectDir = f $ projectDir r}
@@ -322,7 +318,8 @@ readREqState2 theSet theSig thMap txts
                          , logicsig = theSig
                          , theories = thrys
                          , currTheory = cThNm
-                         , liveProofs = lPrfs }
+                         , liveProofs = lPrfs 
+                         , inGUIMode = False}
 \end{code}
 
 \subsection{Test Functions}

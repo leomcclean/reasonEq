@@ -17,6 +17,7 @@ module Utilities (
 , zip1, zip2, zip2'
 , nlookup, alookup
 , extract, keyListDiff
+, splitFstSnd
 , numberList, numberList'
 , putPP, putShow, pp
 , YesBut(..)
@@ -31,10 +32,12 @@ module Utilities (
 , splitLast, splitAround
 , brkspn, brkspnBy, splice
 , args2str, args2int, userPrompt, userPause
+, removeTermColours
 )
 where
 
 import Data.List
+import Data.List.Split
 import Data.Char
 import Data.Set(Set)
 import qualified Data.Set as S
@@ -180,7 +183,13 @@ keyListDiff keyf recs1 recs2
     | otherwise          =  diff (mr,qe,r2:fd,wn) rs1      rs2
 \end{code}
 
-
+Drop the last element of every tuple in a list
+\begin{code}
+splitFstSnd :: [(a, b, [c])] -> [(a, b)]
+splitFstSnd []            = []
+splitFstSnd [(a,b,_)]     = [(a,b)]
+splitFstSnd ((a,b,_):xs)  = (a,b) : splitFstSnd xs
+\end{code}
 
 Unsure what these are about!
 \begin{code}
@@ -696,4 +705,29 @@ disp2set i [] = "{}"
 --disp2set i [STlist []] = "{}"
 disp2set i [STlist sts] = disp2set i sts
 disp2set i (st:sts) = "{ "++ disp2 (i+2) st ++ disp2c i sts ++ " }"
+\end{code}
+
+\subsubsection{Removing Terminal Colour-tags}
+
+\begin{code}
+colourList :: [String]
+colourList = ["[30m"
+             ,"[31m"
+             ,"[32m"
+             ,"[33m"
+             ,"[34m"
+             ,"[35m"
+             ,"[36m"
+             ,"[37m"
+             , "[0m"]
+
+removeTermColours :: String -> String
+removeTermColours text = if "[0m" `isInfixOf` text
+                         then removeAllColours text colourList
+                         else text
+
+removeAllColours :: String -> [String] -> String
+removeAllColours text []     = text
+removeAllColours text [x]    = concat $ splitOn x text
+removeAllColours text (x:xs) = removeAllColours (concat $ splitOn x text) xs
 \end{code}

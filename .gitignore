@@ -16,3 +16,6 @@ tgraph.png
 *.o
 temp.txt
 *.out
+build
+node_modules
+*.sh

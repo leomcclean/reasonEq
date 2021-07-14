@@ -6,7 +6,7 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 \end{verbatim}
 \begin{code}
 module Persistence
-  ( writeAllState
+  ( writeAllState, writeAllStateUI
   , readAllState
   , writeNamedTheoryTxt
   , readNamedTheory
@@ -17,6 +17,8 @@ where
 
 import System.Directory
 import System.FilePath
+
+import Graphics.UI.Threepenny hiding (map)
 
 import Utilities
 import REqState
@@ -47,6 +49,8 @@ cjfile pjdir nm = pjdir ++ pathSeparator : nm <.> conjectureExt
 
 \subsection{Persistent \reasonEq\ State}
 
+The REPL uses requires traditional IO, but the GUI requires
+that our read/write functions be of the UI monad.
 \begin{code}
 writeAllState :: REqState -> IO ()
 writeAllState reqs
@@ -54,36 +58,48 @@ writeAllState reqs
        let fp = pfile reqs
        writeFile fp $ unlines tsTxt
        sequence_ $ map (writeNamedTheoryTxt reqs) nTsTxts
+
+writeAllStateUI :: REqState -> UI ()
+writeAllStateUI reqs
+  = do let (tsTxt,nTsTxts) = writeREqState reqs
+       let fp = pfile reqs
+       liftIO $ writeFile fp $ unlines tsTxt
+       liftIO $ sequence_ $ map (writeNamedTheoryTxt reqs) nTsTxts
 \end{code}
 
 \begin{code}
-readAllState :: FilePath -> IO REqState
+readAllState :: FilePath -> IO (REqState, [String])
 readAllState projdirfp
-  = do let projfp = projectPath projdirfp
-       putStrLn ("Reading project details from "++projfp)
-       txt <- readFile projfp
-       ((settings,sig,thnms),rest1) <- readREqState1 $ lines txt
-       nmdThrys <- sequence $ map (readNamedTheory projdirfp) thnms
-       reqs <- readREqState2 settings sig nmdThrys rest1
-       return reqs{projectDir = projdirfp}
+  = do  let projfp = projectPath projdirfp
+        txt <- readFile projfp
+        ((sttngs,sig,thnms),rest1) <- readREqState1 $ lines txt
+        nTAll <- sequence $ map (readNamedTheory projdirfp) thnms
+        nmdThrys <- return $ splitFstSnd nTAll
+        nTOutput <- return $ concat $ map thd3 nTAll
+        reqs <- readREqState2 sttngs sig nmdThrys rest1
+        let output =   ["Reading project details from " ++ projfp]
+                   ++  nTOutput
+        return (reqs{projectDir = projdirfp},output)
 \end{code}
-
 
 \subsection{Persistent Theory}
 
 \begin{code}
+writeNamedTheoryTxt :: REqState -> (FilePath, [String]) -> IO ()
 writeNamedTheoryTxt reqs (nm,thTxt)
   = do let fp = tfile (projectDir reqs) nm
        writeFile fp $ unlines thTxt
 \end{code}
 
 \begin{code}
+readNamedTheory :: String -> String -> IO (String, Theory, [String])
 readNamedTheory projfp nm
   = do let fp = tfile projfp nm
        txt <- readFile fp
        (thry,rest) <- readTheory $ lines txt
-       putStrLn ("Read theory '"++nm++"'")
-       return (nm,thry)
+       let output = ["Reading theory file for '"++nm++"'"
+                    ,"Parsing theory file for '"++nm++"'"]
+       return (nm,thry,output)
 \end{code}
 
 \subsection{Persistent Conjecture}
