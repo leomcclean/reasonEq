@@ -158,8 +158,6 @@ observeKnowns reqs _
   where hdr = "\n---\n"
 \end{code}
 
-
-
 \subsubsection{Observing Current Theory}
 
 \begin{code}
@@ -187,10 +185,9 @@ observeCurrConj reqs _
 \subsubsection{Observing Live Proofs}
 
 \begin{code}
-observeLiveProofs :: REqState -> String
+observeLiveProofs :: REqState -> [String]
 observeLiveProofs reqs = showLiveProofs $ liveProofs reqs
 \end{code}
-
 
 \subsubsection{Observing Completed Proofs}
 
@@ -554,7 +551,6 @@ We have a multi-phase approach here:
     (\texttt{applyMatchToFocus2}).
 \end{itemize}
 
-
 First we find the match and determine which determine what variables
 in the replacement are floating,
 and return those along with the match.
@@ -581,7 +577,6 @@ We have two calls here,
 one for standard variables,
 one for list variables.
 
-
 \begin{code}
 applyMatchToFocus2Std :: Monad m => Variable -> Term -> Match -> m Match
 applyMatchToFocus2Std v t m
@@ -596,9 +591,7 @@ applyMatchToFocus2Lst lv vl m = return m
   -- mBind  ::  Binding    -- resulting binding
   -- mLawSC ::  SideCond   -- law side-condition mapped to goal
   -- mRepl  ::  Term       -- replacement term, instantiated with binding
-
 \end{code}
-
 
 Now given the ``float-free'' match,
 try to discharge that side-condition.
@@ -639,7 +632,6 @@ applyMatchToFocus3 mtch floating ubind liveProof
             else fail ("Undischarged side-conditions: "++trSideCond scD)
 \end{code}
 
-
 \subsubsection{Normalise Quantifiers}
 
 \textbf{Deprecated. Should be done under the hood as required}
@@ -662,7 +654,6 @@ normQuantFocus thrys liveProof
  | otherwise  =  fail "quant-norm: only when s.c. is true"
  -- we can soon fix this. But this should be done automatically.
 \end{code}
-
 
 \subsubsection{Simplify Nested Quantifiers Substitution}
 
@@ -706,7 +697,6 @@ substituteFocus thrys liveProof
          _  -> fail "substitute only for explicit substitution focii"
 \end{code}
 
-
 \subsubsection{Observing Laws in Scope}
 
 \begin{code}
@@ -728,7 +718,6 @@ observeKnownsInScope liveProof
 
 \end{code}
 
-
 \subsubsection{Flattening and Grouping Associative Operators}
 
 \begin{code}
@@ -744,7 +733,6 @@ flattenAssociative opI liveProof
                             $ stepsSoFar__ (((Flatten opI,asn')):)
                             $ liveProof )
 \end{code}
-
 
 \begin{code}
 groupAssociative :: Monad m => Identifier -> GroupSpec -> LiveProof

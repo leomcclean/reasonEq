@@ -74,13 +74,11 @@ htmlBr = (createEle "br" "p")
          ++ ((getElement "outputBox") `appendChild` "br")
 
 -- JS code to clear all output
-clearOutput :: JavaScript
-clearOutput = "var elements = document.getElementsByClassName(\"output\");\
-              \while(elements.length > 0)\
-              \{\
-                \elements[0].parentNode.removeChild(elements[0]);\
-              \};"
-              ++ (modifyDOM "output cleared") ++ htmlBr
+clearOutput :: [String] -> JavaScript
+clearOutput boxes = "var elements = document.getElementsByClassName(\"output\");\
+                    \while(elements.length > 0)\
+                    \{elements[0].parentNode.removeChild(elements[0]);};"
+                    ++ hideJS boxes ""
 
 -- show one element, while hiding the rest
 showOneEle :: [String] -> String -> JavaScript

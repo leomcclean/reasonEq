@@ -126,12 +126,12 @@ helpinfo
 We shall define a record to record flag data,
 and a corresponding parser:
 \begin{code}
-data CMDFlags = CMDFlags { usegui  :: Bool
+data CMDFlags = CMDFlags { usegui :: Bool
                          , wspath :: Maybe FilePath
-                         , dev     :: Bool}
+                         , dev    :: Bool}
 
 defFlags = CMDFlags { usegui  = False
-                    , wspath = Nothing
+                    , wspath  = Nothing
                     , dev     = False }
 
 parseArgs :: [[Char]] -> CMDFlags
@@ -183,7 +183,9 @@ initState flags
   = case wspath flags of
       Nothing ->
         if dev flags
-        then return (devInitState,[""])
+        then if usegui flags
+          then return (devInitState{ inGUIMode = True },[""])
+          else return (devInitState,[""])
         else do (appFP,projects) <- getWorkspaces progName
                 (pname,projfp) <- currentWorkspace 
                   (unlines $ fst $ writeREqState reqstate0) projects
@@ -199,7 +201,9 @@ initState flags
         do  ok <- doesDirectoryExist fp
             if ok
             then if dev flags
-              then return (devInitState{ projectDir = fp },[""])
+              then if usegui flags
+                then return (devInitState{ projectDir = fp, inGUIMode = True },[""])
+                else return (devInitState{ projectDir = fp },[""])
               else do
                 (reqs0, response) <- readAllState fp
                 return (reqs0, ["Running user mode, loading project state."] ++ response)
@@ -366,7 +370,7 @@ showState (cmd:args) reqs
  | cmd == shKnown     =  doshow reqs $ observeKnowns reqs args
  | cmd == shCurrThry  =  doshow reqs $ observeCurrTheory reqs
  | cmd == shConj      =  doshow reqs $ observeCurrConj reqs args
- | cmd == shLivePrf   =  doshow reqs $ observeLiveProofs reqs
+ | cmd == shLivePrf   =  doshow reqs $ unlines $ observeLiveProofs reqs
  | cmd == shSettings  =  doshow reqs $ observeSettings reqs
 showState _ reqs      =  doshow reqs "unknown/unimplemented 'show' option."
 
@@ -423,17 +427,20 @@ saveState _ reqs  =  doshow reqs "unknown 'save' option."
 loadState [] reqs
   = do let dirfp = projectDir reqs
        putStrLn ("Reading all prover state from "++dirfp++"...")
-       (reqs',_) <- readAllState dirfp
+       (reqs',output) <- readAllState dirfp
+       putStrLn $ unlines output
        putStrLn ("...done.")
        return reqs'{ inDevMode = inDevMode reqs}
 loadState [nm] reqs
   = do let dirfp = projectDir reqs
-       (nm,thry,_) <- readNamedTheory dirfp nm
+       (nm,thry,output) <- readNamedTheory dirfp nm
+       putStrLn $ unlines output
        putStrLn ("Theory '"++nm++"'read from  '"++projectDir reqs++"'.")
        return $ changed $ theories__ (replaceTheory' thry) reqs
 loadState ["new",nm] reqs
   = do let dirfp = projectDir reqs
-       (nm,thry,_) <- readNamedTheory dirfp nm
+       (nm,thry,output) <- readNamedTheory dirfp nm
+       putStrLn $ unlines output
        putStrLn ("Theory '"++nm++"'read from  '"++projectDir reqs++"'.")
        case addTheory thry $ theories reqs of
          Yes thrys' -> return $ changed $ theories_ thrys' reqs
@@ -486,7 +493,6 @@ displayConjectures [nm] reqs
        return reqs
 displayConjectures _ reqs  =  doshow reqs "unknown 'ldc' option."
 \end{code}
-
 
 \newpage
 \subsection{Set Command}
@@ -574,7 +580,6 @@ doAssumption args reqs
  where cjnm = args2str args
 \end{code}
 
-
 Reverting proven or assumed laws back to conjectures.
 \begin{code}
 cmdDemote :: REqCmdDescr
@@ -595,10 +600,8 @@ doDemotion args reqs
  where lwnm = args2str args
 \end{code}
 
-
 \newpage
 \subsection{Proving Commands}
-
 
 Then we introduce doing a proper proof:
 \begin{code}
@@ -625,7 +628,6 @@ doNewProof args reqs
              Nothing -> doshow reqs "Invalid strategy no"
              Just liveProof -> proofREPL reqs liveProof
 \end{code}
-
 
 \begin{code}
 cmdRet2Proof :: REqCmdDescr
@@ -659,7 +661,6 @@ presentSeq (str,seq)
 presentHyp hthy
   = intercalate "," $ map (trTerm 0 . assnT . snd . fst) $ laws hthy
 \end{code}
-
 
 \newpage
 \subsection{Proof REPL}

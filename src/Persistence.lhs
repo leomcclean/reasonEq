@@ -6,7 +6,7 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 \end{verbatim}
 \begin{code}
 module Persistence
-  ( writeAllState, writeAllStateUI
+  ( writeAllState
   , readAllState
   , writeNamedTheoryTxt
   , readNamedTheory

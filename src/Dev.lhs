@@ -8,6 +8,7 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 module Dev
 ( devInitState
 , devBIRemind
+, devKnownBuiltins, biLkp
 , devListAllBuiltins
 , devInstallBuiltin
 , devResetBuiltin
@@ -63,7 +64,8 @@ devInitState
             , logicsig = propSignature
             , theories = devTheories
             , currTheory = equivName
-            , liveProofs = M.empty }
+            , liveProofs = M.empty
+            , inGUIMode = False }
 
 devTheories =
      fromJust $ addTheory utpBaseTheory $
@@ -128,7 +130,7 @@ devInstallBuiltin reqs thnm
                   , reqs)
       Just thry
         -> case addTheory thry $ theories reqs of
-             But msgs -> return (Just $ unlines' msgs,reqs)
+             But msgs   -> return (Just $ unlines' msgs,reqs)
              Yes thrys' -> return (Nothing,changed reqs{theories=thrys'})
 \end{code}
 

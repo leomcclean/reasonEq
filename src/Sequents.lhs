@@ -27,7 +27,6 @@ module Sequents
  , Calculation
  , Proof, displayProof
  , showLogic, showTheories, showNmdAssns, showLaws
- , numberList
  ) where
 
 import Data.Set (Set)

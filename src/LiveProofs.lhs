@@ -941,7 +941,6 @@ undoCalcStep liveProof
     setTerm t (tz,sequent') = (mkTZ t,sequent')
 \end{code}
 
-
 \newpage
 \subsection{Making a Theorem}
 
@@ -977,14 +976,13 @@ makeEquivalence nm liveProof
 
 \textbf{This should all be done via proper generic rendering code}
 
-
 Showing Proof:
 \begin{code}
-showLiveProofs :: LiveProofs -> String
+showLiveProofs :: LiveProofs -> [String]
 showLiveProofs lproofs
- | M.null lproofs  =  "No ongoing (live) proofs."
- | otherwise       =  unlines' [ "Current live (incomplete) proofs:"
-                               , numberList showLiveProof $ M.elems lproofs ]
+  | M.null lproofs = ["No ongoing (live) proofs."]
+  | otherwise      = ["Current live (incomplete) proofs:"]
+                     ++ (numberListReturnsList showLiveProof $ M.elems lproofs)
 
 showLiveProof :: LiveProof -> String
 showLiveProof liveProof

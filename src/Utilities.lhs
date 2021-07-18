@@ -8,6 +8,7 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 module Utilities (
   utilities
 , fst3, snd3, thd3
+, everyNth
 , ttail
 , unlines'
 , issubset
@@ -18,7 +19,7 @@ module Utilities (
 , nlookup, alookup
 , extract, keyListDiff
 , splitFstSnd
-, numberList, numberList'
+, numberList, numberListReturnsList, numberList', appendCountToList
 , putPP, putShow, pp
 , YesBut(..)
 , hasdup
@@ -82,11 +83,19 @@ thd3 :: (a,b,c) -> c ; thd3(_,_,z) = z
 \subsection{List Functions}
 
 \subsubsection{Total Tail}
-
 \begin{code}
 ttail :: [a] -> [a]
 ttail []      =  []
 ttail (_:xs)  =  xs
+\end{code}
+
+\subsubsection{Every Nth Item}
+\begin{code}
+everyNth :: Int -> [a] -> [a]
+everyNth n xs =
+  case drop (n-1) xs of
+    y : ys -> y : everyNth n ys
+    [] -> []
 \end{code}
 
 \subsubsection{Predicate: has duplicates}
@@ -222,8 +231,6 @@ splitAround s xs
 
 Not sure what the above are all about!
 
-
-
 The following are good for processing lists ordered in a custom way:
 \begin{code}
 brkspn :: (a -> Bool) -> [a] -> ([a], [a], [a])
@@ -293,10 +300,12 @@ zip2' b = map (\a->(a,b))
 A common idiom is to show a list of items as a numbered list
 to make selecting them easier:
 \begin{code}
+numberListReturnsList showItem list
+  = map (numberItem showItem) $ zip [1..] list
 numberList showItem list
-  =  unlines' $ map (numberItem showItem) $  zip [1..] list
+  = unlines' $ map (numberItem showItem) $ zip [1..] list
 numberItem showItem (i,item)
-  =  pad 4 istr ++ istr ++ ". " ++ showItem item
+  = pad 4 istr ++ istr ++ ". " ++ showItem item
   where istr = show i
 
 pad w str
@@ -316,6 +325,14 @@ numberList' showItem list
 numberItem' maxw (i,(str,strlen))
   = str ++ replicate (maxw-strlen) ' ' ++ pad 2 istr ++ istr
   where istr = show i
+\end{code}
+
+The GUI does not need to attach numbers in front of items,
+it only needs them attached to items themselves.
+\begin{code}
+appendCountToList [] _ = []
+appendCountToList (x:xs) y = (x,k) : appendCountToList xs (y+1)
+  where k = show y
 \end{code}
 
 \subsubsection{Argument String Handling}
@@ -395,7 +412,6 @@ readBool str
 readBool _                     =  False
 \end{code}
 
-
 \subsubsection{Read Integer}
 \begin{code}
 readInt :: String -> Int
@@ -404,9 +420,8 @@ readInt str
  | all isDigit str  =   read str
  | otherwise        =   -1
 \end{code}
+
 \newpage
-
-
 \subsection{Control-Flow Functions}
 
 \subsubsection{Repeat Until Equal}
@@ -463,7 +478,6 @@ instance MonadPlus YesBut where
   But _     `mplus` yes2       =  yes2
   yes1      `mplus` _          =  yes1
 \end{code}
-
 
 \newpage
 \subsection{Pretty-printing Derived Show}
@@ -543,8 +557,6 @@ Pausing (before \textrm{clearIt}, usually)
 \begin{code}
 userPause = userPrompt "hit <enter> to continue"
 \end{code}
-
-
 
 \newpage
 \subsubsection{Parsing Tokens}
@@ -721,10 +733,12 @@ colourList = ["[30m"
              ,"[37m"
              , "[0m"]
 
-removeTermColours :: String -> String
-removeTermColours text = if "[0m" `isInfixOf` text
-                         then removeAllColours text colourList
-                         else text
+removeTermColours :: [String] -> [String]
+removeTermColours []      = []
+removeTermColours (x:xs)  = if "[0m" `isInfixOf` x
+                          then removeAllColours x colourList : ys
+                          else x : ys
+                            where ys = removeTermColours xs
 
 removeAllColours :: String -> [String] -> String
 removeAllColours text []     = text

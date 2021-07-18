@@ -10,6 +10,7 @@ module GUI
 )
 where
 
+import Data.List.Split
 import Graphics.UI.Threepenny hiding (version, span, map, empty)
 import qualified Graphics.UI.Threepenny as UI
 
@@ -34,45 +35,13 @@ import Utilities
 
 \subsection{Introduction}
 
-The GUI utilises both the AbstractUI and REPL to achieve a functional user interface.
-The most simple way to introduce a GUI is to interrupt the existing REPL, and modify
-the 'print' subsection. If 'print' could instead be considered 'pass action or print',
-we can utilise the existing REPL framework. This has numerous advantages.
-
-\subsection{State}
-
-\begin{code}
-type GUIArguments = String
-type GUICmd state = GUIArguments -> state -> UI state
-type GUICmdDescr state = (String, GUICmd state)
-type GUIExit state = GUIArguments -> state -> IO (Bool,state)
-type GUICommands state = [GUICmdDescr state]
-\end{code}
-
-We have a configuration that defines the REPL behaviour
-that does not change during its lifetime:
-\begin{code}
-data GUIConfig state
-  = GUIC {
-      guiEOFReplacement :: [String]
-    , guiQuitCmds :: [String]
-    , guiQuit :: GUIExit state
-    , guiCommands :: GUICommands state
-    , guiEndCondition :: state -> Bool
-    , guiEndTidy :: GUICmd state
-    }
-\end{code}
-
-A series of textt{state} transformations.
-
-\begin{code}
-
-\end{code}
-
 Various variables that are here to de-clutter the rest of the codebase
 \begin{code}
-showBoxes = [ "showBtnBox", "setTheoryBox", "newConjBox", "newProofBox", "returnProofBox"
-            , "saveBox", "loadBox", "loadConjBox", "assumeBox", "demoteBox", "builtinBox"]
+showBoxes = [ "showBtnBox", "setTheoryBox", "newConjBox", "newProofBox"
+            , "returnBox", "saveBox", "loadBox","loadTBox"
+            , "fLoadTBox", "loadConjBox", "assumeBox", "demoteBox"
+            , "builtinBox", "installTBox", "resetTBox", "updateTBox"
+            , "fUpdateTBox" ]
 
 htmlPurple = "#9b59b6"
 
@@ -97,127 +66,167 @@ runServ port reqs0 wlcmt workspace = do
         output <- getElementsByClassName win "output"
         interface <- mkInterface reqs output
         getBody win # set children [interface]
-        runFunction $ ffi $ (displayJS "modifiedFlag" $ modified reqs) ++ autoScroll ++ htmlBr
+        runFunction $ ffi $
+          (displayJS "modifiedFlag" $ modified reqs)
+          ++ (displayJS "devFlag" $ inDevMode reqs)
+          ++ autoScroll ++ htmlBr
 
       -- this creates the interface which we further manipulate directly through the DOM
       mkInterface :: REqState -> [Element] -> UI Element
       mkInterface reqs prevOutput = do
 
-        workspaceButton <- mkJSButton "overlayBtn" "Show Workspaces" $
-          (createJS True workspace) ++ (displayJS "showBtnBox" False)
+        -- relevant information loaded from REqState
+        allTheories <- return $ map trim $ splitOn ";" devListAllBuiltins
+        loadedTheories <- return $ map trim $ splitOn ";" $ observeTheoryNames reqs
+        notLoadedTheories <- return $ filter (\x -> not (x `elem` loadedTheories)) allTheories
+        currentConjectures <- return $ map (\x -> head $ splitOn "”" x) $ tail $ splitOn "“"
+          $ concat $ splitOn "\n" $ observeCurrConj reqs [""] -- bad double quotes used '“' and '”'
+        currentProofs <- return $ map (\(_:_:xs) -> trim $ head $ splitOn "@" xs)
+          $ map trim $ tail $ observeLiveProofs reqs
 
-        -- This has to expand to setting changes
-
-        setTheoryInput <- UI.input #. "overlayInput" # set id_ "setTheoryInput"
-        setTheoryButton <- modStateButton "overlayBtn" "Set Theory" setTheoryInput guiSetTheory reloadInterface reqs
-
+        -- 'flags' used to visually indicate some part of REqState
+        modifiedFlag <- UI.div #. "flag" # set text "Modified" # set id_ "modifiedFlag"
+        devFlag <- UI.div #. "flag" # set text "Dev Mode" # set id_ "devFlag"
+        currTheoryFlag <- UI.div #. "flag" # set text ("Current Theory '" ++ currTheory reqs ++ "'") # set id_ "currTheoryFlag"
+        
+        -- input boxes used
         conjNameInput <- UI.input #. "overlayInput" # set id_ "conjNameInput"
         conjTermInput <- UI.input #. "overlayInput" # set id_ "conjTermsInput"
+        loadInput <- UI.input #. "overlayInput" # set id_ "loadInput"
+        saveInput <- UI.input #. "overlayInput" # set id_ "saveInput"
+        demoteInput <- UI.input #. "overlayInput" # set id_ "demoteInput"
+        demoteButton <- getInputButton "overlayBtn" "Demote Specific Law" demoteInput guiDemote reloadInterface reqs
+
+        -- certain unique buttons that would bloat the lists they are placed into
         newConjButton <- UI.button #. "button" # set text "Make New Conjecture" # set id_ "overlayBtn"
+        saveConjButton <- UI.button #. "button" # set text "Save Conjectures"
+        quitButton <- mkJSButton "button" "Quit" "window.close();"
+
+        -- functionality for the above buttons
         on UI.click newConjButton $ \_ -> do
           value1 <- conjNameInput # get value
           value2 <- conjTermInput # get value
           reqs1 <- guiNewConj value1 value2 reqs
           reloadInterface reqs1 
+        on UI.click saveConjButton $ \_ -> do
+          output <- guiSaveConj reqs
+          let _fix  = map (\x -> if x=='"' then '\''; else x)
+              fixed = map _fix output
+          guiShow reqs $ fixed ++ ["Saved Conjectures."]
+        on UI.click quitButton $ \_ -> guiQuit reqs
 
-
-
-        saveButton <- mkJSButton "overlayBtn" "Save All Prover States" $ hideJS showBoxes ""
-        on UI.click saveButton $ \_ -> do
-          writeAllStateUI reqs
-          appendHTML ["REQ-STATE written to '"++projectDir reqs++"'."]
-          reloadInterface reqs{ modified = False} 
-
-        demoteInput <- UI.input #. "overlayInput" # set id_ "demoteInput"
-        demoteButton <- modStateButton "overlayBtn" "Demote Specific Law" demoteInput guiDemote reloadInterface reqs
-
+        -- aggregation of buttons/inputs to more easily create DOM structure
         let
-          -- blank button for spacing in 'hidden' submenus
-          blankButton = UI.button #. "blank" # set text ""
-          cancelButton = [mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes ""]
+          -- list of primary control buttons
+          -- left hand primary buttons
+          ctrlBtnList :: [UI Element]
+          ctrlBtnList = [ (mkJSButton "button" "Show Context" $ showOneEle showBoxes "showBtnBox")
+                        , (mkJSButton "button" "Set Theory" setCode)
+                        , (mkJSButton "button" "New Conjecture" newConjCode)
+                        , (mkJSButton "button" "New Proof" newProofCode)
+                        , (mkJSButton "button" "Return to Proof" returnProofCode)
+                        , (mkJSButton "button" "Save State" saveCode)
+                        , (mkJSButton "button" "Load State" loadCode)
+                        , (element saveConjButton)
+                        , (mkJSButton "button" "Load Conjectures" loadConjCode)
+                        , (mkJSButton "button" "Assume Conjecture" assumeCode)
+                        , (mkJSButton "button" "Demote Law" demoteCode)
+                        , (mkJSButton "button" "Modify Theories" builtinCode)
+                        , (mkJSButton "button" "Clear Output" $ clearOutput showBoxes) ]
           -- list of 'Show' related buttons
           showBtnList :: [UI Element]
-          showBtnList = [ (element workspaceButton)
-                        , blankButton
-                        , (mkJSButton "overlayBtn" "Show Current Theory" $ abstractUIjs reqs observeCurrTheory)
-                        , (mkJSButton "overlayBtn" "Show Theory Names" $ abstractUIjs reqs observeTheoryNames)
-                        , (mkJSButton "overlayBtn" "Show Theory Relations" $ abstractUIjs reqs observeTheories)
-                        , (mkJSButton "overlayBtn" "Show All Theories" allTheories)
-                        , blankButton          
-                        , (mkJSButton "overlayBtn" "Show Logic Signature" $ abstractUIjs reqs observeSig) 
-                        , (mkJSButton "overlayBtn" "Show Live Proofs" $ liveProofButton reqs)
-                        , (mkJSButton "overlayBtn" "Show Laws" $ abstractUIjs2 [""] reqs observeLaws)
-                        , (mkJSButton "overlayBtn" "Show Laws (Uniqueness)" $ abstractUIjs2 [""] reqs observeLaws)
-                        , (mkJSButton "overlayBtn" "Show Known Names" $ abstractUIjs2 [""] reqs observeKnowns)
-                        , (mkJSButton "overlayBtn" "Show Current Conjectures" $ abstractUIjs2 [""] reqs observeCurrConj)
-                        , (mkJSButton "overlayBtn" "Hide" $ displayJS "showBtnBox" False) ]
-                        where allTheories = (createJS True [devListAllBuiltins, devBIRemind]) ++ (hideJS showBoxes "")
-          -- various sub-menus that become available
-          setTheoryList = map element [setTheoryInput, setTheoryButton]
-          newConjList   = map element [conjNameInput, conjTermInput, newConjButton]
-          newProofList = [ UI.input #. "overlayInput" # set id_ "newProofInput"
-                         , (mkJSButton "overlayBtn" "Create Proof" $ hideJS showBoxes "") ]
-          returnProofList = [ UI.input #. "overlayInput" # set id_ "returnProofInput"
-                            , (mkJSButton "overlayBtn" "Return to Proof" $ hideJS showBoxes "")
-                            , (mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes "")]
-          saveList = [ element saveButton
-                     , (mkJSButton "overlayBtn" "Save Current Theory" $ hideJS showBoxes "")
-                     , blankButton
-                     , UI.input #. "overlayInput" # set id_ "saveInput"
-                     , (mkJSButton "overlayBtn" "Save Specific Theory" $ hideJS showBoxes "")
-                     , (mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes "")]
-          loadList = [ (mkJSButton "overlayBtn" "Load Prover States" $ hideJS showBoxes "")
-                     , blankButton
-                     , UI.input #. "overlayInput" # set id_ "loadInput"
-                     , (mkJSButton "overlayBtn" "Load Existing Theory" $ hideJS showBoxes "")
-                     , (mkJSButton "overlayBtn" "Load New Theory" $ hideJS showBoxes "")
-                     , (mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes "")]
-          loadConjList = [ UI.input #. "overlayInput" # set id_ "loadConjInput"
-                         , (mkJSButton "overlayBtn" "Load Conjecture" $ hideJS showBoxes "")
-                         , (mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes "")]
-          assumeList = [ (mkJSButton "overlayBtn" "Assume All Current Conjectures" $ hideJS showBoxes "")
-                       , (mkJSButton "overlayBtn" "Assume All Dependency Conjecture" $ hideJS showBoxes "")
-                       , blankButton
-                       , UI.input #. "overlayInput" # set id_ "assumeInput"
-                       , (mkJSButton "overlayBtn" "Assume Specific Conjecture" $ hideJS showBoxes "")
-                       , (mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes "")]
-          demoteList = [ (mkJSButton "overlayBtn" "Demote All Current Proven Laws" $ hideJS showBoxes "")
-                       , (mkJSButton "overlayBtn" "Demote All Current Assumed Laws" $ hideJS showBoxes "")
-                       , blankButton, element demoteInput, element demoteButton
-                       , (mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes "")]
-          builtinList = [ UI.input #. "overlayInput" # set id_ "builtinInput"
-                        , (mkJSButton "overlayBtn" "Install Specified Theory" $ hideJS showBoxes "")
-                        , (mkJSButton "overlayBtn" "Reset Specified Theory" $ hideJS showBoxes "")
-                        , (mkJSButton "overlayBtn" "Update Specified Theory" $ hideJS showBoxes "")
-                        , (mkJSButton "overlayBtn" "Force Update Specified Theory" $ hideJS showBoxes "")
-                        , (mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes "")]
+          showBtnList = [ mkJSButton "overlayBtn" "Show Current Theory" $ _show [observeCurrTheory reqs]
+                        , mkJSButton "overlayBtn" "Show Theory Names" $ _show [observeTheoryNames reqs]
+                        , mkJSButton "overlayBtn" "Show Theory Relations" $ _show [observeTheories reqs]
+                        , mkJSButton "overlayBtn" "Show All Theories" $ _show [devListAllBuiltins, devBIRemind]
+                        , blankButton   
+                        , mkJSButton "overlayBtn" "Show Logic Signature" $ _show [observeSig reqs]
+                        , mkJSButton "overlayBtn" "Show Live Proofs" _liveProofs
+                        , mkJSButton "overlayBtn" "Show Laws" $ _show [observeLaws reqs [""]]
+                        , mkJSButton "overlayBtn" "Show Laws (Uniqueness)" $ _show [observeLaws reqs [""]]
+                        , mkJSButton "overlayBtn" "Show Known Names" $ _show [observeKnowns reqs [""]]
+                        , mkJSButton "overlayBtn" "Show Current Conjectures" $ _show [observeCurrConj reqs [""]]
+                        , mkJSButton "overlayBtn" "Show Settings" $ _show [observeSettings reqs]
+                        , mkJSButton "overlayBtn" "Show Workspaces" $ (createJS True workspace) ++ (displayJS "showBtnBox" False)]
+                        where _show output  = (createJS True output) ++ (hideJS showBoxes "")
+                              _liveProofs   = (colourJS (removeTermColours $ observeLiveProofs reqs) "@" htmlPurple "")
+                                              ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
 
-        modifiedFlag <- UI.div #. "flag" # set text "Modified" # set id_ "modifiedFlag"
-        devFlag <- UI.div #. "flag" # set text "Dev Mode" # set id_ "devFlag"
-        quitBtn <- mkJSButton "button" "Quit" "window.close();"
+          -- various sub-menus that become available for user input
+          setTheoryList = map (\x -> hasInputButton "overlayBtn" ("Set '" ++ x ++ "'")
+                              x guiSetTheory reloadInterface reqs) loadedTheories
+          newConjList   = map element [conjNameInput, conjTermInput, newConjButton]
+          newProofList  = map (\(x,y) -> hasInputButton "overlayBtn" ("Prove '" ++ x ++ "'")
+                              y guiNewProof reloadInterface reqs) $ appendCountToList currentConjectures 1 
+          returnList    = map (\(x,y) -> hasInputButton "overlayBtn" ("Prove '" ++ x ++ "'")
+                              y guiResumeProof reloadInterface reqs) $ appendCountToList currentProofs 1         
+          saveList      = [ hasInputButton "overlayBtn" "Save Prover State" "" guiSave reloadInterface reqs
+                          , hasInputButton "overlayBtn" "Save Current Theory" "." guiSave reloadInterface reqs
+                          , blankButton] ++  map (\x -> hasInputButton "overlayBtn" ("Save '" ++ x ++ "'")
+                                              x guiSave reloadInterface reqs) loadedTheories
+          loadList      = [ hasInputButton "overlayBtn" "Load Prover State" "" guiLoad reloadInterface reqs
+                          , blankButton
+                          , mkJSButton "overlayBtn" "Load Theory" loadTCode
+                          , mkJSButton "overlayBtn" "Force Load Theory" fLoadTCode ]
+          loadConjList  = [ UI.input #. "overlayInput" # set id_ "loadConjInput"
+                          , mkJSButton "overlayBtn" "Load Conjecture" $ hideJS showBoxes ""]
+          assumeList    = [ mkJSButton "overlayBtn" "Assume All Current Conjectures" $ hideJS showBoxes ""
+                          , mkJSButton "overlayBtn" "Assume All Dependency Conjecture" $ hideJS showBoxes ""
+                          , blankButton
+                          , UI.input #. "overlayInput" # set id_ "assumeInput"
+                          , mkJSButton "overlayBtn" "Assume Specific Conjecture" $ hideJS showBoxes ""]
+          demoteList    = [ mkJSButton "overlayBtn" "Demote All Current Proven Laws" $ hideJS showBoxes ""
+                          , mkJSButton "overlayBtn" "Demote All Current Assumed Laws" $ hideJS showBoxes ""]
+                          ++ [blankButton] ++ map element [demoteInput, demoteButton]
+          builtinList   = [ mkJSButton "overlayBtn" "Install Theory" installTCode
+                          , mkJSButton "overlayBtn" "Reset Theory" resetTCode
+                          , mkJSButton "overlayBtn" "Update Theory" updateTCode
+                          , mkJSButton "overlayBtn" "Force Update Theory" fUpdateTCode]
+          installTList  = map (\x -> hasInputButton "overlayBtn" ("Install '" ++ x ++ "'")
+                            x guiInstall reloadInterface reqs) notLoadedTheories
+          resetTList    = map (\x -> hasInputButton "overlayBtn" ("Reset '" ++ x ++ "'")
+                            x guiReset reloadInterface reqs) loadedTheories
+          updateTList   = map (\x -> hasInputButton "overlayBtn" ("Reset '" ++ x ++ "'")
+                            x guiUpdate reloadInterface reqs) loadedTheories
+          fUpdateTList  = map (\x -> hasInputButton "overlayBtn" ("Reset '" ++ x ++ "'")
+                            x guiForceUpdate reloadInterface reqs) loadedTheories
+          loadTList     = map (\x -> hasInputButton "overlayBtn" ("Load '" ++ x ++ "'")
+                            x guiLoad reloadInterface reqs) loadedTheories
+          fLoadTList    = map (\x -> hasInputButton "overlayBtn" ("Force Load '" ++ x ++ "'")
+                            x guiForceLoad reloadInterface reqs) loadedTheories
+
+        -- final aggregation of all elements into parent, returning a nested structure
 
         -- container divs for the buttons
-        buttonBox <- UI.div #. "buttonBox" #+ (ctrlBtnList ++ [element quitBtn])
-        showBtnBox <- UI.div #. "overlayBox" # set id_ "showBtnBox" #+ showBtnList
-        setTheoryBox <- UI.div #. "overlayBox" # set id_ "setTheoryBox" #+ (setTheoryList ++ cancelButton)
-        newConjBox <- UI.div #. "overlayBox" # set id_ "newConjBox" #+ (newConjList ++ cancelButton)
-        newProofBox <- UI.div #. "overlayBox" # set id_ "newProofBox" #+ (newProofList ++ cancelButton)
-        returnProofBox <- UI.div #. "overlayBox" # set id_ "returnProofBox" #+ (returnProofList ++ cancelButton)
-        saveBox <- UI.div #. "overlayBox" # set id_ "saveBox" #+ (saveList ++ cancelButton)
-        loadBox <- UI.div #. "overlayBox" # set id_ "loadBox" #+ (loadList ++ cancelButton)
-        loadConjBox <- UI.div #. "overlayBox" # set id_ "loadConjBox" #+ (loadConjList ++ cancelButton)
-        assumeBox <- UI.div #. "overlayBox" # set id_ "assumeBox" #+ (assumeList ++ cancelButton)
-        demoteBox <- UI.div #. "overlayBox" # set id_ "demoteBox" #+ (demoteList ++ cancelButton)
-        builtinBox <- UI.div #. "overlayBox" # set id_ "builtinBox" #+ (builtinList ++ cancelButton)
+        buttonBox     <- UI.div #. "buttonBox" #+ (ctrlBtnList ++ [element quitButton])
+        showBtnBox    <- mkOverlayDiv "showBtnBox" "Show" (showBtnList ++ [testButton])
+        setTheoryBox  <- mkOverlayDiv "setTheoryBox" "Set Theory" setTheoryList 
+        newConjBox    <- mkOverlayDiv "newConjBox" "New Conjecture" newConjList
+        newProofBox   <- mkOverlayDiv "newProofBox" "New Proof" newProofList
+        returnBox     <- mkOverlayDiv "returnBox" "Return to Proof" returnList
+        saveBox       <- mkOverlayDiv "saveBox" "Save" saveList
+        loadBox       <- mkOverlayDiv "loadBox" "Load" loadList
+        loadTBox      <- mkOverlayDiv "loadTBox" "Load Theory" loadTList
+        fLoadTBox     <- mkOverlayDiv "fLoadTBox" "Force Load Theory" fLoadTList
+        loadConjBox   <- mkOverlayDiv "loadConjBox" "Load Conjecture" loadConjList
+        assumeBox     <- mkOverlayDiv "assumeBox" "Assume Conjecture" assumeList
+        demoteBox     <- mkOverlayDiv "demoteBox" "Demote Law" demoteList
+        builtinBox    <- mkOverlayDiv "builtinBox" "Modify Theories" builtinList
+        installTBox   <- mkOverlayDiv "installTBox" "Install Theory" installTList
+        resetTBox     <- mkOverlayDiv "resetTBox" "Reset Theory" resetTList
+        updateTBox    <- mkOverlayDiv "updateTBox" "Update Theory" updateTList
+        fUpdateTBox   <- mkOverlayDiv "fUpdateTBox" "Force Update Theory" fUpdateTList
 
         -- main output and input
         initOutput <- UI.p   #. "initOutput" # set id_ "initOutput" # set text ""
         outputBox <- UI.div #. "outputBox" # set id_ "outputBox"
-          #+ (map element $ [initOutput, modifiedFlag, devFlag] ++ prevOutput)
+          #+ (map element $ [initOutput, modifiedFlag, devFlag, currTheoryFlag] ++ prevOutput)
         controlBox <- UI.div #. "controlBox" # set id_ "controlBox"
           #+ (map element 
-          [ showBtnBox, setTheoryBox, newConjBox, newProofBox, returnProofBox
-          , saveBox, loadBox, loadConjBox, assumeBox, demoteBox, builtinBox, outputBox ])
+          [ showBtnBox, setTheoryBox, newConjBox, newProofBox, returnBox
+          , saveBox, loadBox, loadTBox, fLoadTBox, loadConjBox 
+          , assumeBox, demoteBox, builtinBox, installTBox, resetTBox
+          , updateTBox, fUpdateTBox, outputBox ])
 
         -- container holding everything together
         mainContainer <- UI.div #. "mainContainer"
@@ -234,23 +243,19 @@ runServ port reqs0 wlcmt workspace = do
 \end{code}
 
 \subsection{Serving Text}
-The core of the REPL is inherently incompatible with the GUI due to the way
-that input is taken. In a REPL the next input is always being waited for, but
-in a GUI many actions can happen and terminate independently of each other.
-
-To make the best use of some REPL code to avoid needless duplication, we can
-modify the usage \texttt{pustStrLn} within \texttt{Main} to check whether the 
-program is running in GUI mode or otherwise, and produce an output accordingly.
+Since we have created a source from which all output comes, specific output
+can be arbitrarily appended at any time. This is the most basic point of entry
+for generic text output.
 \begin{code}
 -- executing a string in JS that was put together in Haskell to modify the HTML DOM
 appendHTML :: [String] -> UI ()
 appendHTML output = runFunction $ ffi $ createJS False output
 \end{code}
 
-\subsection{Buttons}
-The hallmark of any good GUI is plenty of buttons. Sensibly placed, and suitably
-showBoxes sometimes, but none the less many buttons that produce a variety of outputs 
-or other functionality (such as asking for more user input, or showing more buttons).
+\subsection{Buttons and a Div}
+The hallmark of any good GUI is plenty of buttons. The following functions create
+the variety of types of buttons used to a) Display more input options,
+b) Modify the REqState, or c) Show some part of REqState.
 \begin{code}
 -- create a button that performs some JavaScript Action
 mkJSButton :: String -> String -> JavaScript -> UI Element
@@ -261,119 +266,225 @@ mkJSButton identity btnLabel _code = do
     UI.p # set text ""
   return btn
 
--- creates a button that modifys the REqState in some way
-modStateButton :: String -> String -> Element -- button id, label, corresponding 'input' element
-  -> (String -> REqState -> UI REqState) -- function to interface with AbstractUI
-  -> (REqState -> UI ()) -- the reloadInterface function (to refresh REqState)
+-- creates a button that modifys the REqState based on some gathered input
+getInputButton :: String -> String -> Element
+  -> (String -> REqState -> UI REqState)
+  -> (REqState -> UI ())
   -> REqState -> UI Element
-modStateButton identity btnLabel inputBox auiFunc reloadFunc reqs = do
-  btn <- UI.button #. "button" # set text btnLabel # set id_ identity
+getInputButton identity _label _input _func reload reqs = do
+  btn <- UI.button #. "button" # set text _label # set id_ identity
   on UI.click btn $ \_ -> do
-    ivalue <- inputBox # get value
-    reqs1 <- auiFunc ivalue reqs
-    reloadFunc reqs1
+    _value <- _input # get value
+    reqs1 <- _func _value reqs
+    reload reqs1
   return btn
 
--- creates JavaScript from the result of some AbstractUI functions
-abstractUIjs :: REqState -> (REqState -> String) -> JavaScript
-abstractUIjs reqs f = (createJS True [f reqs])
-  ++ (displayJS "showBtnBox" False)
+-- creates a button that modifies the REqState in some fixed way
+hasInputButton :: String -> String -> String
+  -> (String -> REqState -> UI REqState)
+  -> (REqState -> UI ())
+  -> REqState -> UI Element
+hasInputButton identity _label arg _func reload reqs = do
+  btn <- UI.button #. "button" # set text _label # set id_ identity
+  on UI.click btn $ \_ -> do
+    reqs1 <- _func arg reqs
+    reload reqs1
+  return btn
 
--- creates JavaScript from the result of some AbstractUI functions
-abstractUIjs2 :: [String] -> REqState
-  -> (REqState -> [String] -> String) -> JavaScript
-abstractUIjs2 args reqs f = (createJS True [f reqs args])
-  ++ (displayJS "showBtnBox" False)
+-- useful buttons with specific, limited functionality
+blankButton = UI.button #. "blank" # set text ""
+cancelButton = mkJSButton "overlayBtn" "Cancel" $ hideJS showBoxes ""
+testButton    = do
+                btn <- UI.button #. "button" # set text "Test Something" # set id_ "overlayBtn"
+                on UI.click btn $ \_ -> appendHTML ["test"]
+                return btn
 
--- removes (and to replace) the terminal colour codes of Live Proofs
-liveProofButton :: REqState -> JavaScript
-liveProofButton reqs = 
-  (colourJS (lines $ removeTermColours $ observeLiveProofs reqs) "@" htmlPurple "")
-  ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
-\end{code}
-
-\subsection{Read-made Buttons}
-
-The below buttons are used as the primary controls for the application.
-\begin{code}
-setCode         = showOneEle showBoxes "setTheoryBox"
-                  ++ setPlaceholder "setTheoryInput" "Theory..."
-newConjCode     = showOneEle showBoxes "newConjBox"
-                  ++ setPlaceholder "conjNameInput" "Conjecture Name..."
-                  ++ setPlaceholder "conjTermsInput" "Conjecture Terms..."
-newProofCode    = showOneEle showBoxes "newProofBox"
-                  ++ setPlaceholder "newProofInput" "Proof Number..."
-returnProofCode = showOneEle showBoxes "returnProofBox"
-                  ++ setPlaceholder "returnProofInput" "Proof Number..."
-saveCode        = showOneEle showBoxes "saveBox"
-                  ++ setPlaceholder "saveInput" "Theory..."
-loadCode        = showOneEle showBoxes "loadBox"
-                  ++ setPlaceholder "loadInput" "Theory..."
-loadConjCode    = showOneEle showBoxes "loadConjBox"
-                  ++ setPlaceholder "loadConjInput" "Conjecture..."
-assumeCode      = showOneEle showBoxes "assumeBox"
-                  ++ setPlaceholder "assumeInput" "Conjecture..."
-demoteCode      = showOneEle showBoxes "demoteBox"
-                  ++ setPlaceholder "demoteInput" "Law..."
-builtinCode     = showOneEle showBoxes "builtinBox"
-                  ++ setPlaceholder "builtinInput" "Theory..."
-
--- left hand primary buttons
-ctrlBtnList :: [UI Element]
-ctrlBtnList = [ (mkJSButton "button" "Show Options" $ showOneEle showBoxes "showBtnBox")
-              , (mkJSButton "button" "Set Theory" setCode)
-              , (mkJSButton "button" "New Conjecture" newConjCode)
-              , (mkJSButton "button" "New Proof" newProofCode)
-              , (mkJSButton "button" "Return to Proof" returnProofCode)
-              , (mkJSButton "button" "Save State" saveCode)
-              , (mkJSButton "button" "Load State" loadCode)
-              , (mkJSButton "button" "Save Conjectures" "return();")
-              , (mkJSButton "button" "Load Conjectures" loadConjCode)
-              , (mkJSButton "button" "Assume Conjecture" assumeCode)
-              , (mkJSButton "button" "Demote Law" demoteCode)
-              , (mkJSButton "button" "Modify Theories" builtinCode)
-              , (mkJSButton "button" "Clear Output" clearOutput) ]
+-- create an 'overlay' div
+mkOverlayDiv :: String -> String -> [UI Element] -> UI Element
+mkOverlayDiv identity _title btns = UI.div #. "overlayBox" # set id_ identity
+  #+ [UI.p #. "divTitle" # set text _title] #+ btns #+ [cancelButton]
 \end{code}
 
 \subsection{Interfacing with Abstract UI}
 
+These functions are remarkably similar to the REPL functions, the key
+difference being the indentation and the use of the UI monad and the
+changes made to accomodate it.
 \begin{code}
 guiShow :: REqState -> [String] -> UI REqState
 guiShow reqs output = appendHTML output >> return reqs
 
 guiSetTheory ::  String -> REqState -> UI REqState
-guiSetTheory theory reqs 
-    =  case setCurrentTheory theory reqs of
-         Nothing     ->  guiShow reqs  ["No such theory: '"    ++ theory ++ "'"]
-         Just reqs'  ->  guiShow reqs' ["Current Theory now '" ++ theory ++ "'"]
+guiSetTheory theory reqs =
+  case setCurrentTheory theory reqs of
+    Nothing     ->  guiShow reqs  ["No such theory: '"    ++ theory ++ "'"]
+    Just reqs'  ->  guiShow reqs' ["Current Theory now '" ++ theory ++ "'"]
 
 guiNewConj :: String -> String -> REqState -> UI REqState
-guiNewConj name content reqs = do 
-       case sPredParse content of
-         But msgs  -> guiShow reqs ("Bad Term, ":msgs)
-         Yes (term,_) ->
-           do asn' <- mkAsn term scTrue
-              case newConjecture (currTheory reqs) (name,asn') reqs of
-                But msgs  -> guiShow reqs msgs
-                Yes reqs' -> guiShow reqs' ["Conjecture '"++name++"' installed"]
+guiNewConj _name terms reqs = do 
+  case sPredParse terms of
+    But msgs  -> guiShow reqs ("Bad Term, ":msgs)
+    Yes (term,_) -> do
+      asn' <- mkAsn term scTrue
+      case newConjecture (currTheory reqs) (_name,asn') reqs of
+        But msgs  -> guiShow reqs msgs
+        Yes reqs' -> guiShow reqs' ["Conjecture '"++_name++"' installed"]
+
+guiNewProof :: String -> REqState -> UI REqState
+guiNewProof arg reqs =
+  case newProof1 num reqs of
+    Nothing -> guiShow reqs ["Invalid conjecture number"]
+    Just (nconj,strats)
+      -> case newProof2 nconj strats 1 reqs of
+          Nothing -> guiShow reqs ["Invalid strategy number"]
+          Just liveProof -> guiShow reqs ["valid options"] -- liveProof
+    where num = read arg :: Int
+
+guiResumeProof :: String -> REqState -> UI REqState
+guiResumeProof arg reqs =
+  case resumeProof num reqs of
+      Nothing -> do guiShow reqs ["Can't find requested live proof: " ++ arg]
+      Just liveProof -> guiShow reqs ["valid options"]
+  where num = read arg :: Int
+
+guiSave :: String -> REqState -> UI REqState
+guiSave "" reqs = do
+  liftIO $ writeAllState reqs
+  guiShow reqs1 ["REQ-STATE written to '" ++ projectDir reqs ++ "'."]
+    where reqs1 = reqs{ modified = False }
+guiSave nm reqs =
+  let nm' = if nm == "." then (currTheory reqs) else nm
+  in
+  case getTheory nm' $ theories reqs of
+    Nothing
+      -> guiShow reqs ["No such theory: '" ++ nm' ++ "'"]
+    Just thry
+      -> do liftIO $ writeNamedTheoryTxt reqs (nm',writeTheory thry)
+            guiShow reqs ["Theory '" ++ nm' ++ "' written to '" ++ projectDir reqs ++ "'."]
+
+guiLoad :: String -> REqState -> UI REqState
+guiLoad "" reqs = do
+  let dirfp = projectDir reqs
+  (reqs1, output) <- liftIO $ readAllState dirfp 
+  guiShow reqs1{ inDevMode = inDevMode reqs}
+    $ ["Reading all prover state from " ++ dirfp ++ "..."]
+    ++ output ++ ["...done."]
+guiLoad theory reqs = do
+  let dirfp = projectDir reqs
+  (nm,thry,output) <- liftIO $ readNamedTheory dirfp theory
+  reqs1 <- return $ changed $ theories__ (replaceTheory' thry) reqs
+  guiShow reqs1 $ output
+    ++ ["Theory '" ++ nm ++ "'read from  '" ++ dirfp ++ "'."]
+
+guiForceLoad :: String -> REqState -> UI REqState
+guiForceLoad theory reqs = do
+  let dirfp = projectDir reqs
+  (nm,thry,output) <- liftIO $ readNamedTheory dirfp theory
+  _ <- guiShow reqs $ output
+    ++ ["Theory '" ++ nm ++ "'read from  '" ++ dirfp ++ "'."]
+  case addTheory thry $ theories reqs of
+    Yes thrys'  -> return $ changed $ theories_ thrys' reqs
+    But msgs    -> guiShow reqs $ ["Add theory failed:"] ++ msgs
+
+guiSaveConj :: REqState -> UI [String]
+guiSaveConj reqs =
+  case getTheory (currTheory reqs) $ theories reqs of
+    Nothing   -> return ["Can't find current theory!!!"]
+    Just thry -> do
+      let lawConjs = map lawNamedAssn (laws thry)
+          allConjs = lawConjs ++ conjs thry
+      liftIO $ writeConjectures reqs (thName thry) allConjs
+      return $ map show allConjs
 
 guiDemote :: String -> REqState -> UI REqState
-guiDemote law reqs
-  = case demoteLaw (currTheory reqs) law reqs of
-         But lns    ->  guiShow reqs  lns
-         Yes reqs'  ->  guiShow reqs' ["Demoted " ++ law]
+guiDemote law reqs =
+  case demoteLaw (currTheory reqs) law reqs of
+    But lns    ->  guiShow reqs  lns
+    Yes reqs'  ->  guiShow reqs' ["Demoted " ++ law]
+
+guiInstall :: String -> REqState -> UI REqState
+guiInstall theory reqs =
+  case biLkp theory devKnownBuiltins of
+    Nothing
+      -> guiShow reqs ["devInstallBuiltin: no builtin theory '"++theory++"'"]
+    Just thry
+      -> case addTheory thry $ theories reqs of
+            But msgs   -> guiShow reqs msgs
+            Yes thrys' -> guiShow reqs1 ["Installed theory '"++theory++"'"]
+              where reqs1 = reqs{theories=thrys', modified=True}
+
+guiReset :: String -> REqState -> UI REqState
+guiReset theory reqs =
+  case biLkp theory devKnownBuiltins of
+    Nothing
+      -> guiShow reqs ["devResetBuiltin: no builtin theory '"++theory++"'"]
+    Just thry0
+      -> case replaceTheory theory (const thry0) (theories reqs) of
+            But msgs   ->  guiShow reqs msgs
+            Yes thrys' ->  guiShow reqs1 ["Reset theory '"++theory++"'"]
+              where reqs1 = reqs{theories=thrys', modified=True}
+
+guiUpdate :: String -> REqState -> UI REqState
+guiUpdate theory reqs =
+  case biLkp theory devKnownBuiltins of
+    Nothing
+      -> guiShow reqs ["devUpdateBuiltin: no builtin theory '"++theory++"'"]
+    Just thry0
+      ->  case updateTheory theory thry0 False (theories reqs) of
+            But msgs   -> guiShow reqs msgs
+            Yes thrys' -> guiShow reqs1 ["Updated theory '"++theory++"'"]
+              where reqs1 = reqs{theories=thrys', modified=True}
+
+guiForceUpdate :: String -> REqState -> UI REqState
+guiForceUpdate theory reqs =
+  case biLkp theory devKnownBuiltins of
+    Nothing
+      -> guiShow reqs ["devUpdateBuiltin: no builtin theory '"++theory++"'"]
+    Just thry0
+      ->  case updateTheory theory thry0 True (theories reqs) of
+            But msgs   -> guiShow reqs msgs
+            Yes thrys' -> guiShow reqs1 ["Updated theory '"++theory++"'"]
+              where reqs1 = reqs{theories=thrys', modified=True}
+
+guiQuit :: REqState -> UI ()
+guiQuit reqs
+ | inDevMode reqs  =  close
+ | modified  reqs  =  saveAndGo reqs
+ | otherwise       =  close
+  where
+    saveAndGo reqs0 = do 
+      liftIO $ writeAllState reqs0
+      close
+    close = runFunction $ ffi $ "window.close();"
 \end{code}
 
-mkNewProof :: [String] -> REqState -> UI REqState
-mkNewProof args reqs
-  = case newProof1 (args2int args) reqs of
-     Nothing -> do putStrLn "invalid conjecture number"
-                   return reqs
-     Just (nconj,strats)
-      -> do putStrLn $ numberList presentSeq $ strats
-            putStr "Select sequent by number: "
-            hFlush stdout
-            choice <- getLine
-            case newProof2 nconj strats (readInt choice) reqs of
-             Nothing -> doshow reqs "Invalid strategy no"
-             Just liveProof -> proofREPL reqs liveProof
+\subsection{AbstractUI Prover Interfacing}
+\begin{code}
+
+\end{code}
+
+\subsection{Dual-Functionality Buttons}
+
+The below buttons are some of those used as the primary controls for the application.
+To reduce bloat their JavaScript is kept here.
+\begin{code}
+setCode         = showOneEle showBoxes "setTheoryBox"
+newConjCode     = showOneEle showBoxes "newConjBox"
+                  ++ setPlaceholder "conjNameInput" "Conjecture Name..."
+                  ++ setPlaceholder "conjTermsInput" "Conjecture Terms..."
+newProofCode    = showOneEle showBoxes "newProofBox"
+returnProofCode = showOneEle showBoxes "returnBox"
+saveCode        = showOneEle showBoxes "saveBox"
+loadCode        = showOneEle showBoxes "loadBox"
+loadTCode       = showOneEle showBoxes "loadTBox"
+fLoadTCode      = showOneEle showBoxes "fLoadTBox"
+loadConjCode    = showOneEle showBoxes "loadConjBox"
+                  ++ setPlaceholder "loadConjInput" "Conjecture..."
+assumeCode      = showOneEle showBoxes "assumeBox"
+demoteCode      = showOneEle showBoxes "demoteBox"
+builtinCode     = showOneEle showBoxes "builtinBox"
+installTCode    = showOneEle showBoxes "installTBox"
+resetTCode      = showOneEle showBoxes "resetTBox"
+updateTCode     = showOneEle showBoxes "updateTBox"
+fUpdateTCode    = showOneEle showBoxes "fUpdateTBox"
+\end{code}
