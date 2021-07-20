@@ -230,8 +230,6 @@ readLiveProof thylist txts
               , rest10 )
 \end{code}
 
-
-
 \newpage
 \subsection{Writing and Reading Live Proofs}
 
@@ -255,12 +253,10 @@ readLiveProofs thylist txts
        return (lprfs,rest3)
 \end{code}
 
-
 \newpage
 \subsection{Proof Starting and Stopping}
 
 \subsubsection{Starting a Proof with default strategy}
-
 
 We need to setup a proof from a conjecture:
 \begin{code}
@@ -310,7 +306,6 @@ launchProof thys thnm cjnm asn@(Assertion t sc) (strat,sequent)
 
 \newpage
 \subsubsection{Testing for Proof Completion}
-
 
 We need to determine when a live proof is complete:
 \begin{code}

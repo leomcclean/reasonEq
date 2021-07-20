@@ -648,20 +648,6 @@ doBack2Proof args reqs
       Just liveProof -> proofREPL reqs liveProof
 \end{code}
 
-Presenting a sequent for choosing:
-\begin{code}
-presentSeq (str,seq)
-  = "'" ++ str ++ "':  "
-    ++ presentHyp (hyp seq)
-    ++ "   " ++ _vdash ++ "   " ++
-    trTerm 0 (cleft seq)
-    ++ "   =   " ++
-    trTerm 0 (cright seq)
-
-presentHyp hthy
-  = intercalate "," $ map (trTerm 0 . assnT . snd . fst) $ laws hthy
-\end{code}
-
 \newpage
 \subsection{Proof REPL}
 

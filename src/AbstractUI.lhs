@@ -271,7 +271,6 @@ This is not a single abstract UI call,
 but rather a series of calls, with all but the last
 returning various items that need to be used by the concrete UI
 to collect arguments for the next call.
-
 \begin{code}
 newProof1 :: Monad m => Int -> REqState
           -> m ( NmdAssertion

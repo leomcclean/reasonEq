@@ -31,7 +31,7 @@ body::-webkit-scrollbar-track-piece
 /* Contains the buttons to the left of the input/output area. */
 .buttonBox
 {
-    height: 510px;
+    height: 530px;
     width: 150px;
 
     display: flex;
@@ -61,7 +61,7 @@ button:hover { background-color: rgba(0, 180, 0, 0.5); }
 /* The container div for the output/input. */
 .controlBox
 {
-    height: 510px;
+    height: 530px;
 
     display: flex;
     flex-direction: column;

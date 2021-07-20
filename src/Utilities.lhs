@@ -19,7 +19,7 @@ module Utilities (
 , nlookup, alookup
 , extract, keyListDiff
 , splitFstSnd
-, numberList, numberListReturnsList, numberList', appendCountToList
+, numberList, numberListReturnsList, numberList', pairNumberList
 , putPP, putShow, pp
 , YesBut(..)
 , hasdup
@@ -330,8 +330,8 @@ numberItem' maxw (i,(str,strlen))
 The GUI does not need to attach numbers in front of items,
 it only needs them attached to items themselves.
 \begin{code}
-appendCountToList [] _ = []
-appendCountToList (x:xs) y = (x,k) : appendCountToList xs (y+1)
+pairNumberList [] _ = []
+pairNumberList (x:xs) y = (x,k) : pairNumberList xs (y+1)
   where k = show y
 \end{code}
 
@@ -736,12 +736,15 @@ colourList = ["[30m"
 removeTermColours :: [String] -> [String]
 removeTermColours []      = []
 removeTermColours (x:xs)  = if "[0m" `isInfixOf` x
-                          then removeAllColours x colourList : ys
-                          else x : ys
-                            where ys = removeTermColours xs
+                            then removeAllColours x colourList : ys
+                            else x : ys
+                              where ys = removeTermColours xs
 
 removeAllColours :: String -> [String] -> String
-removeAllColours text []     = text
-removeAllColours text [x]    = concat $ splitOn x text
-removeAllColours text (x:xs) = removeAllColours (concat $ splitOn x text) xs
+removeAllColours text []       = text
+removeAllColours text [col]    = addColFlag text col
+removeAllColours text (col:xs) = removeAllColours (addColFlag text col) xs
+
+addColFlag :: String -> String -> String
+addColFlag text col = concat $ intersperse "#col#" $ splitOn col text
 \end{code}

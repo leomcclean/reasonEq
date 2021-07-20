@@ -9,6 +9,7 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 module Sequents
  ( Sequent(..)
  , TermSC, NamedTermSC
+ , presentSeq, presentHyp
  , availableStrategies
  , reduce, redboth, redtail, redinit
  , reduceAll, reduceBoth, reduceToLeftmost, reduceToRightmost
@@ -29,6 +30,7 @@ module Sequents
  , showLogic, showTheories, showNmdAssns, showLaws
  ) where
 
+import Data.List
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Map (Map)
@@ -90,6 +92,19 @@ type TermSC = (Term, SideCond)
 type NamedTermSC = (String, TermSC)
 \end{code}
 
+Presenting a sequent for choosing:
+\begin{code}
+presentSeq (str,seq)
+  = "'" ++ str ++ "':  "
+    ++ presentHyp (hyp seq)
+    ++ "   " ++ _vdash ++ "   " ++
+    trTerm 0 (cleft seq)
+    ++ "   =   " ++
+    trTerm 0 (cright seq)
+
+presentHyp hthy
+  = intercalate "," $ map (trTerm 0 . assnT . snd . fst) $ laws hthy
+\end{code}
 
 Given any conjecture (named assertion)
 we want to determine which strategies apply

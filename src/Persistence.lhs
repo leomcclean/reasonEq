@@ -58,13 +58,6 @@ writeAllState reqs
        let fp = pfile reqs
        writeFile fp $ unlines tsTxt
        sequence_ $ map (writeNamedTheoryTxt reqs) nTsTxts
-
-writeAllStateUI :: REqState -> UI ()
-writeAllStateUI reqs
-  = do let (tsTxt,nTsTxts) = writeREqState reqs
-       let fp = pfile reqs
-       liftIO $ writeFile fp $ unlines tsTxt
-       liftIO $ sequence_ $ map (writeNamedTheoryTxt reqs) nTsTxts
 \end{code}
 
 \begin{code}
