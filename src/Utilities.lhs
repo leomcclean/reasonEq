@@ -33,7 +33,7 @@ module Utilities (
 , splitLast, splitAround
 , brkspn, brkspnBy, splice
 , args2str, args2int, userPrompt, userPause
-, removeTermColours
+, cleanANSI
 )
 where
 
@@ -47,6 +47,8 @@ import qualified Data.Map as M
 import System.IO
 import Control.Applicative
 import Control.Monad
+
+import NiceSymbols
 
 --import Debug.Trace -- disable when not used, as this module is 'open'
 --dbg msg x = trace (msg++show x) x
@@ -722,7 +724,6 @@ disp2set i (st:sts) = "{ "++ disp2 (i+2) st ++ disp2c i sts ++ " }"
 \subsubsection{Removing ANSI Colour-tags}
 
 \begin{code}
-colourList :: [String]
 colourList = ["[30m"
              ,"[31m"
              ,"[32m"
@@ -731,25 +732,27 @@ colourList = ["[30m"
              ,"[35m"
              ,"[36m"
              ,"[37m"
-             --,"[4m"
+             ,"[4m" -- underline
+             ,"[3m" -- italic
+             ,"[1m" -- bold
              ,"[0m"]
 
 -- we don't just strip the ANSI because we want to add our own colours
-removeTermColours :: [String] -> [String]
-removeTermColours []      = []
-removeTermColours (x:xs)  = if "[0m" `isInfixOf` x
-                            then removeAllColours x colourList : ys
-                            else x : ys
-                              where ys = removeTermColours xs
+cleanANSI :: [String] -> [String]
+cleanANSI input   = map stripANSI $ replaceANSI input
 
-removeAllColours :: String -> [String] -> String
-removeAllColours text []       = text
-removeAllColours text [tag]    = addColFlag text tag
-removeAllColours text (tag:xs) = removeAllColours (addColFlag text tag) xs
+replaceANSI :: [String] -> [String]
+replaceANSI []      = []
+replaceANSI (x:xs)  = if "[0m" `isInfixOf` x
+                            then swapColours x colourList : ys
+                            else x : ys
+                              where ys = replaceANSI xs
+
+swapColours :: String -> [String] -> String
+swapColours text []       = text
+swapColours text [tag]    = addColFlag text tag
+swapColours text (tag:xs) = swapColours (addColFlag text tag) xs
 
 addColFlag :: String -> String -> String
-addColFlag text tag = concat
-                      $ intersperse "#col#"
-                      $ map (\x -> filter (/='\ESC') x)
-                      $ splitOn tag text
+addColFlag text tag = concat $ map (filter (/='\ESC')) $ intersperse "#col#" $ splitOn tag text
 \end{code}

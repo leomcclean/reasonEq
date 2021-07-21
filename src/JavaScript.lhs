@@ -7,7 +7,8 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 \begin{code}
 module JavaScript
 ( JavaScript
-, modifyDOM, createJS, reduceToJS, colourJS
+, modifyDOM, createJS, colourJS
+, eliminateSChar
 , htmlBr, autoScroll, setPlaceholder
 , showOneEle, displayJS, hideJS
 , clearOutput
@@ -32,15 +33,17 @@ colFlag = "#col#"
 -- top level function that creates a series of JS statements to manipulate the HTML DOM
 createJS :: Bool -> [String] ->JavaScript
 createJS br s = if br
-                then code ++ htmlBr
-                else code
-                  where code = (reduceToJS $ eliminateSChar $ unlines s) ++ autoScroll
+                then code ++ autoScroll ++ htmlBr
+                else code ++ autoScroll
+                  where code = concat $ map modifyDOM $ eliminateSChar $ unlines s 
 
 -- delimit a string on newline (\n) and tab (\t) characters
 -- also clean the array of empty ("") entries
 -- can clean up specific arrays on a case by case basis later
 eliminateSChar :: String -> [String]
-eliminateSChar s = filter (not . null) $ splitOn "\n" s
+eliminateSChar s  = filter (not . null)
+                  $ splitOn "\n"
+                  $ filter (/='\t') s
 
 -- recursive function to create a long string of JavaScript from an array of output text
 reduceToJS :: [String] -> JavaScript
@@ -104,7 +107,7 @@ hideJS (x:xs) js = hideJS xs $ js ++ (style (getElement x) "display" "none")
 
 -- generate a block of JS with certain text having the colour style
 colourJS :: [String] -> Colour -> JavaScript -> JavaScript
-colourJS [] c js     = js
+colourJS [] _ js     = js
 colourJS [x] c js    = if colFlag `isInfixOf` x
                         then js ++ (colourHTML x c)
                         else js ++ modifyDOM x
@@ -113,28 +116,28 @@ colourJS (x:xs) c js = if colFlag `isInfixOf` x
                         else modifyDOM x    ++ (colourJS xs c js) 
 
 -- JS code that adds coloured text
--- for some unknown reason invalid characters are being inserted 
--- at the end of the first two 'span' elements. we fix this below
 -- the "∨" character does not get rendered in electron, so it is substituted with "v"
 colourHTML :: String -> Colour -> JavaScript
 colourHTML _text c = (createEle "para" "p")
                       ++ (setClass "para" "output")
-                      ++ (createEle "span" "span")
-                      ++ (setName "span" "weirdBox1")
-                      ++ (setText "span" x)
-                      ++ ("para" `appendChild` "span")
-                      ++ (createEle "span1" "span")
-                      ++ (setName "span1" "weirdBox2")
-                      ++ (style "span1" "color" c)
-                      ++ (setText "span1" fixed_y)
-                      ++ ("para" `appendChild` "span1")
-                      ++ (createEle "span2" "span")
-                      ++ (style "span2" "color" "white")
-                      ++ (setText "span2" $ head xs)
-                      ++ ("para" `appendChild` "span2")
+                      ++ fst_span
+                      ++ snd_span
+                      ++ thd_span
                       ++ ((getElement "outputBox") `appendChild` "para")
   where (x:y:xs)  = splitOn colFlag _text
-        fixed_y   = map (\z -> if z=='∨' then 'v'; else z) y
+        z         = head xs
+        fixed_y   = map (\k -> if k=='∨' then 'v'; else k) y
+        fst_span  = if x=="" then "" else (createEle "span1" "span")
+                                          ++ (setText "span1" x)
+                                          ++ ("para" `appendChild` "span1")
+        snd_span  = if y=="" then "" else (createEle "span2" "span")
+                                          ++ (style "span2" "color" c)
+                                          ++ (setText "span2" fixed_y)
+                                          ++ ("para" `appendChild` "span2")
+        thd_span  = if z=="" then "" else (createEle "span3" "span")
+                                          ++ (style "span3" "color" "white")
+                                          ++ (setText "span3" z)
+                                          ++ ("para" `appendChild` "span3")
 
 -- these are various JS statements for easier recreation
 -- all inputs are strings, all outputs are a single string (of JavaScript)

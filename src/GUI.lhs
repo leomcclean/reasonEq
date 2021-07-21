@@ -10,6 +10,7 @@ module GUI
 )
 where
 
+import Data.List
 import Data.List.Split
 import Graphics.UI.Threepenny hiding (version, span, map, empty)
 import qualified Graphics.UI.Threepenny as UI
@@ -27,7 +28,6 @@ import TestParsing
 import Utilities
 
 --TODO:
--- Main.lhs       - Prover state recreated without reliance on REPL to parse inputs
 -- GUI.lhs        - Re-create the final functionality of the prover state
 
 \end{code}
@@ -152,7 +152,7 @@ mkMainInterface reqs workspace prevOutput = do
                   , mkJSButton "Show Settings" $ _show [observeSettings reqs]
                   , mkJSButton "Show Workspaces" $ (createJS True workspace) ++ (displayJS "showBtnBox" False)]
                   where _show output  = (createJS True output) ++ (hideJS reqBoxes "")
-                        _liveProofs   = (colourJS (removeTermColours $ observeLiveProofs reqs) htmlPurple "")
+                        _liveProofs   = (colourJS (cleanANSI $ observeLiveProofs reqs) htmlPurple "")
                                         ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
 
     -- various sub-menus that become available for user input
@@ -258,7 +258,7 @@ mkProofInterface (reqs,lp) = do
                   , mkJSButton "Show Settings" $ _show [observeSettings reqs]
                   , mkJSButton "Show Workspaces" $ displayJS "showBtnBox" False]
                   where _show output  = (createJS True output) ++ (hideJS reqBoxes "")
-                        _liveProofs   = (colourJS (removeTermColours $ observeLiveProofs reqs) htmlPurple "")
+                        _liveProofs   = (colourJS (cleanANSI $ observeLiveProofs reqs) htmlPurple "")
                                         ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
 
   controlBox <- mkOutput reqs []
@@ -375,7 +375,7 @@ sequentButton _label _seq _data reqs = do
     (reqs1,lp)  <-  guiNewProof2 _data num reqs
     interface   <-  mkProofInterface (reqs1,lp)
     getBody win # set children [interface]
-    appendHTML $ "Prover Starting..." : observeProver lp
+    guiProverIntro lp
   return btn
   where num = read _seq :: Int
 
@@ -388,9 +388,9 @@ resumeProofButton _label proof reqs = do
     (reqs1,lp)  <-  guiResumeProof num reqs
     interface   <-  mkProofInterface (reqs1,lp)
     getBody win # set children [interface]
-    appendHTML $ "Prover Starting..." : observeProver lp
+    guiProverIntro lp
   return btn
-  where num = read proof :: Int 
+  where num = read proof :: Int
 
 -- useful buttons with specific, limited functionality
 blankButton = UI.button #. "blank" # set text ""
@@ -566,6 +566,12 @@ guiQuit reqs
 
 \subsection{AbstractUI Prover Interactions}
 \begin{code}
+guiProverIntro :: LiveProof -> UI ()
+guiProverIntro lp = execJS proofIntro
+  where proverText = cleanANSI $ eliminateSChar $ unlines $ observeProver lp
+        cleanIntro = "Prover Starting..." : proverText
+        proofIntro = gapBrackets $ parseProverEntry cleanIntro  1 
+  
 matchLawCommand :: String -> (REqState, LiveProof) -> UI (REqState, LiveProof)
 matchLawCommand "" (reqs, liveProof)
   =  return (reqs, matchFocus (logicsig reqs) ranking liveProof)
@@ -612,6 +618,18 @@ badQuoteSeparator _input  = map (\x -> head $ splitOn "”" x)
 parseProofs :: [String] -> [String]
 parseProofs proofs  = map (\(_:_:xs) -> trim $ head $ splitOn "@" xs)
                       $ map trim $ tail proofs
+
+-- function to colour certain lines of the default prover entry text
+parseProverEntry :: [String] -> Int -> JavaScript
+parseProverEntry (x:y:xs) 1 = (colourJS [x,y] htmlRed "") ++ (parseProverEntry xs 2) ++ htmlBr 
+parseProverEntry (x:xs) 2   = (colourJS [x] htmlLime "") ++ (parseProverEntry xs 3) ++ htmlBr
+parseProverEntry xs 4       = (colourJS xs htmlPurple "") ++ htmlBr
+parseProverEntry xs 3       = (parseProverEntry (init xs) 4) ++ (colourJS [last xs] htmlRed "") ++ htmlBr
+parseProverEntry _ _        = ""
+
+-- [] stlye brackets don't show a gap in the GUI, so we add one
+gapBrackets :: JavaScript -> JavaScript
+gapBrackets js = intercalate "[ ]" $ splitOn "[]" js
 \end{code}
 
 \subsection{Various Variables}
@@ -628,7 +646,9 @@ reqBoxes = [ "showBtnBox", "setTheoryBox", "newConjBox", "newProofBox"
 
 proveBoxes =  [""]
 
-htmlPurple = "#9b59b6"
+htmlPurple  = "#9b59b6"
+htmlRed     = "#ff0000"
+htmlLime    = "#00ff00"
 
 customConfig port = UI.defaultConfig {jsPort = Just port, jsStatic = Just "./static"}
 \end{code}
