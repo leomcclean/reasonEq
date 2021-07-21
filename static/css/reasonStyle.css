@@ -87,7 +87,6 @@ button:hover { background-color: rgba(0, 180, 0, 0.5); }
     
     font-size: 16px;
 
-    border: solid rgb(40, 40, 40) 1px;
     border-radius: 5px;
 
     background-color: rgb(40, 40, 40);
@@ -108,21 +107,6 @@ flex-box's 'justify-content' attribute not working. */
     color: rgb(255, 255, 255);
 }
 
-/* The styling for the prover input box */
-input
-{
-    margin: 5px 0px;
-    padding: 2px 5px;
-    box-sizing: border-box;
-
-    font-size: 16px;
-    outline: none;
-
-    border: solid rgb(40, 40, 40) 2px;
-    border-radius: 5px;
-
-    background-color: rgb(200, 200, 200);
-}
 /* Styling for all input boxes */
 input:focus { border: solid rgb(0, 180, 0) 2px; }
 input::placeholder { color: var(--c, rgb(40, 40, 40)); }
@@ -142,6 +126,7 @@ input::placeholder { color: var(--c, rgb(40, 40, 40)); }
 {
     margin: 3px;
     padding: 2px 5px;
+    right: 175px;
     box-sizing: border-box;
 
     position: absolute;
@@ -151,27 +136,26 @@ input::placeholder { color: var(--c, rgb(40, 40, 40)); }
     justify-content: center;
     align-items: center;
 
-    border: solid rgba(20, 20, 20, 0.6) 1px;
     border-radius: 5px;
 
     background-color: rgba(20, 20, 20, 0.6);
 }
 
 /* The styling for the overlay butons */
-#overlayBtn
+.overlayBox button
 {
     width: 200px;
     margin: 2px;
 
     border: solid rgb(40, 180, 180) 1px;
 }
-#overlayBtn:hover
+.overlayBox button:hover
 {
     background-color: rgba(40, 180, 180, 0.8);
     font-weight: bold;
 }
 /* A blank button, used to appropriately space out the menu */
-.blank
+.overlayBox .blank
 {
     height: 20px;
     background-color: transparent;
@@ -182,7 +166,7 @@ input::placeholder { color: var(--c, rgb(40, 40, 40)); }
     outline:none;
     box-shadow: 0 0px 0px 0 rgb(0,0,0), 0 0px 0px 0 rgb(0,0,0);
 }
-.blank:hover
+.overlayBox .blank:hover
 {
     cursor: initial;
     background-color: initial;
@@ -203,7 +187,7 @@ input::placeholder { color: var(--c, rgb(40, 40, 40)); }
 /* The styling for the flags */
 .flag
 {
-    width: 120px;
+    width: 10%;
     height: 30px;
     display: none;
     justify-content: center;
@@ -214,23 +198,25 @@ input::placeholder { color: var(--c, rgb(40, 40, 40)); }
 
     font-size: 18px;
     font-weight: bold;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(255, 255, 255, 0.9);
 }
 /* The styling for the REqState flags */
 #modifiedFlag
 {
-    right: 4%;
+    left: 22%;
     background-color: rgba(180, 40, 40, 0.8);
 }
 #devFlag
 {
-    right: 14%;
+    left: 35%;
     background-color: rgba(180, 40, 180, 0.8);
 }
 #currTheoryFlag
 {
     display: flex;
-    width: 200px;
-    right: 34%;
+    width: 20%;
+    left: 2%;
     background-color: rgba(0, 180, 0, 0.8);
+
+    border-radius: 5px 0px 5px 5px;
 }

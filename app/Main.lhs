@@ -520,7 +520,7 @@ setState (cmd:rest) reqs
          Yes reqs'  ->  doshow reqs' ("Current Theory now '" ++ nm ++ "'")
  | cmd == setSettings
     =  case modifySettings rest reqs of
-         But msgs    ->  doshow reqs $ unlines' msgs
+         But msgs   ->  doshow reqs $ unlines' msgs
          Yes reqs'  ->  doshow reqs' ("Settings updated")
  where nm = args2str rest
 setState _ reqs      =  doshow reqs "unknown/unimplemented 'set' option."
