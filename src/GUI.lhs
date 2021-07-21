@@ -18,8 +18,8 @@ import AbstractUI
 import Assertions
 import Dev
 import JavaScript
-import LiveProofs
 import Persistence
+import Ranking
 import REqState
 import Sequents
 import SideCond
@@ -153,7 +153,7 @@ mkMainInterface reqs workspace prevOutput = do
                   , mkJSButton "Show Workspaces" $ (createJS True workspace) ++ (displayJS "showBtnBox" False)]
                   where _show output  = (createJS True output) ++ (hideJS reqBoxes "")
                         _liveProofs   = (colourJS (removeTermColours $ observeLiveProofs reqs) htmlPurple "")
-                                        ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False) ++ fixWeirdBox
+                                        ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
 
     -- various sub-menus that become available for user input
     setTheoryList = map (\x -> hasInputButton ("Set '" ++ x ++ "'")
@@ -240,6 +240,27 @@ mkMainInterface reqs workspace prevOutput = do
 
 mkProofInterface :: (REqState, LiveProof) -> UI Element
 mkProofInterface (reqs,lp) = do
+
+  let
+    -- list of 'Show' related buttons
+    showBtnList :: [UI Element]
+    showBtnList = [ mkJSButton "Show Current Theory" $ _show [observeCurrTheory reqs]
+                  , mkJSButton "Show Theory Names" $ _show [observeTheoryNames reqs]
+                  , mkJSButton "Show Theory Relations" $ _show [observeTheories reqs]
+                  , mkJSButton "Show Builtin Theories" $ _show [devListAllBuiltins, devBIRemind]
+                  , blankButton   
+                  , mkJSButton "Show Logic Signature" $ _show [observeSig reqs]
+                  , mkJSButton "Show Live Proofs" _liveProofs
+                  , mkJSButton "Show Laws" $ _show [observeLaws reqs [""]]
+                  , mkJSButton "Show Laws (Uniqueness)" $ _show [observeLaws reqs [""]]
+                  , mkJSButton "Show Known Names" $ _show [observeKnowns reqs [""]]
+                  , mkJSButton "Show Current Conjectures" $ _show [observeCurrConj reqs [""]]
+                  , mkJSButton "Show Settings" $ _show [observeSettings reqs]
+                  , mkJSButton "Show Workspaces" $ displayJS "showBtnBox" False]
+                  where _show output  = (createJS True output) ++ (hideJS reqBoxes "")
+                        _liveProofs   = (colourJS (removeTermColours $ observeLiveProofs reqs) htmlPurple "")
+                                        ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
+
   controlBox <- mkOutput reqs []
 
   -- container holding everything together
@@ -354,7 +375,7 @@ sequentButton _label _seq _data reqs = do
     (reqs1,lp)  <-  guiNewProof2 _data num reqs
     interface   <-  mkProofInterface (reqs1,lp)
     getBody win # set children [interface]
-    appendHTML ["Prover Starting...", dispLiveProof lp, "proof:"]
+    appendHTML $ "Prover Starting..." : observeProver lp
   return btn
   where num = read _seq :: Int
 
@@ -367,7 +388,7 @@ resumeProofButton _label proof reqs = do
     (reqs1,lp)  <-  guiResumeProof num reqs
     interface   <-  mkProofInterface (reqs1,lp)
     getBody win # set children [interface]
-    appendHTML ["Prover Starting...", dispLiveProof lp, "proof:"]
+    appendHTML $ "Prover Starting..." : observeProver lp
   return btn
   where num = read proof :: Int 
 
@@ -391,7 +412,7 @@ These functions are remarkably similar to the REPL functions, the key
 difference being the indentation and the use of the UI monad and the
 changes made to accomodate it.
 \begin{code}
-guiShow :: REqState -> [String] -> UI REqState
+guiShow :: REqState -> [String] -> UI (REqState)
 guiShow reqs output = appendHTML output >> return reqs
 
 guiSetTheory ::  String -> REqState -> UI REqState
@@ -545,7 +566,16 @@ guiQuit reqs
 
 \subsection{AbstractUI Prover Interactions}
 \begin{code}
-
+matchLawCommand :: String -> (REqState, LiveProof) -> UI (REqState, LiveProof)
+matchLawCommand "" (reqs, liveProof)
+  =  return (reqs, matchFocus (logicsig reqs) ranking liveProof)
+  where
+    ranking = filterAndSort (matchFilter $ settings reqs, favourLHSOrd)
+matchLawCommand lawnm (reqs, liveProof)
+  =  case matchFocusAgainst lawnm (logicsig reqs) liveProof of
+      Yes liveProof'  -> return (reqs, liveProof')
+      But msgs        -> do _ <- guiShow reqs msgs
+                            return (reqs, matches_ [] liveProof)
 \end{code}
 
 \subsection{AbstractUI Helper Functions}

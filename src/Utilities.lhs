@@ -719,7 +719,7 @@ disp2set i [STlist sts] = disp2set i sts
 disp2set i (st:sts) = "{ "++ disp2 (i+2) st ++ disp2c i sts ++ " }"
 \end{code}
 
-\subsubsection{Removing Terminal Colour-tags}
+\subsubsection{Removing ANSI Colour-tags}
 
 \begin{code}
 colourList :: [String]
@@ -731,8 +731,10 @@ colourList = ["[30m"
              ,"[35m"
              ,"[36m"
              ,"[37m"
-             , "[0m"]
+             --,"[4m"
+             ,"[0m"]
 
+-- we don't just strip the ANSI because we want to add our own colours
 removeTermColours :: [String] -> [String]
 removeTermColours []      = []
 removeTermColours (x:xs)  = if "[0m" `isInfixOf` x
@@ -742,9 +744,12 @@ removeTermColours (x:xs)  = if "[0m" `isInfixOf` x
 
 removeAllColours :: String -> [String] -> String
 removeAllColours text []       = text
-removeAllColours text [col]    = addColFlag text col
-removeAllColours text (col:xs) = removeAllColours (addColFlag text col) xs
+removeAllColours text [tag]    = addColFlag text tag
+removeAllColours text (tag:xs) = removeAllColours (addColFlag text tag) xs
 
 addColFlag :: String -> String -> String
-addColFlag text col = concat $ intersperse "#col#" $ splitOn col text
+addColFlag text tag = concat
+                      $ intersperse "#col#"
+                      $ map (\x -> filter (/='\ESC') x)
+                      $ splitOn tag text
 \end{code}

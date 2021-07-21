@@ -8,7 +8,7 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 module JavaScript
 ( JavaScript
 , modifyDOM, createJS, reduceToJS, colourJS
-, htmlBr, autoScroll, setPlaceholder, fixWeirdBox
+, htmlBr, autoScroll, setPlaceholder
 , showOneEle, displayJS, hideJS
 , clearOutput
 )
@@ -135,16 +135,6 @@ colourHTML _text c = (createEle "para" "p")
                       ++ ((getElement "outputBox") `appendChild` "para")
   where (x:y:xs)  = splitOn colFlag _text
         fixed_y   = map (\z -> if z=='∨' then 'v'; else z) y
-
--- fix for the weird insertion of '' in the coloured html text
-fixWeirdBox :: JavaScript
-fixWeirdBox = "var paras = document.getElementsByName(\"weirdBox1\");\
-              \var spans = document.getElementsByName(\"weirdBox2\");\
-              \var i = paras.length;\
-              \while (--i >= 0) {\
-                \paras[i].innerHTML = paras[i].innerHTML.replace(/.$/, '');\
-                \spans[i].innerHTML = spans[i].innerHTML.replace(/.$/, '');\
-              \};"
 
 -- these are various JS statements for easier recreation
 -- all inputs are strings, all outputs are a single string (of JavaScript)

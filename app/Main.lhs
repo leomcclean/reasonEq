@@ -660,11 +660,11 @@ type ProofState
 From this we can define most of the REPL configuration.
 \begin{code}
 proofREPLprompt justHelped (_,liveProof)
-  | justHelped  =  unlines' [ dispLiveProof liveProof
-                            , "proof: "]
-  | otherwise   =  unlines' [ clear -- clear screen, move to top-left
-                            , dispLiveProof liveProof
-                            , "proof: "]
+  | justHelped  =  unlines' $ observeProver liveProof
+                            ++ ["proof: "]
+  | otherwise   =  unlines' $ [ clear ] -- clear screen, move to top-left
+                            ++ observeProver liveProof
+                            ++ ["proof: "]
 
 proofEOFReplacement = []
 
@@ -836,7 +836,7 @@ matchLawCommand [] (reqs, liveProof)
   where
     ranking = filterAndSort (matchFilter $ settings reqs, favourLHSOrd)
 
-matchLawCommand args state@(reqs, liveProof)
+matchLawCommand args (reqs, liveProof)
   =  case matchFocusAgainst lawnm (logicsig reqs) liveProof of
       Yes liveProof'  ->  return (reqs, liveProof')
       But msgs

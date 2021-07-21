@@ -16,13 +16,12 @@ module LiveProofs
  , fPath__, fPath_, matches__, matches_, stepsSoFar__, stepsSoFar_
  , LiveProofs
  , writeLiveProofs, readLiveProofs
- , dispLiveProof
  , startProof, launchProof
  , displayMatches
  -- , instantiateRepl, instReplInMatch
  , buildMatchContext, matchInContexts, matchLawByName, tryLawByName
  , proofIsComplete, finaliseProof
- , undoCalcStep
+ , undoCalcStep, shLiveStep
  , makeEquivalence
  , showLiveProofs
  , showContextLaws
@@ -973,6 +972,7 @@ makeEquivalence nm liveProof
 
 Showing Proof:
 \begin{code}
+-- Modified by Leo (from String to [String] as a return value)
 showLiveProofs :: LiveProofs -> [String]
 showLiveProofs lproofs
   | M.null lproofs = ["No ongoing (live) proofs."]
@@ -988,25 +988,6 @@ showLiveProof liveProof
 \end{code}
 
 \begin{code}
--- displays whole proof in proof REPL
--- temporary
-dispLiveProof :: LiveProof -> String
-dispLiveProof liveProof
- = unlines
-     ( ( ("Proof for "++red (widthHack 2 $ conjName liveProof))
-       : ("\t" ++ green(trTerm 0 trm ++ "  "++ trSideCond sc))
-       : ("by "++strategy liveProof)
-       : map shLiveStep (reverse (stepsSoFar liveProof))
-       )
-       ++
-       ( " ..."
-         : displayMatches (mtchCtxts liveProof) (matches liveProof)
-         : [ underline "           "
-           , dispSeqZip (fPath liveProof) (conjSC liveProof) (focus liveProof)
-           , "" ]
-       ) )
- where (trm,sc) = unwrapASN $ conjecture liveProof
-
 shLiveStep :: CalcStep -> String
 shLiveStep ( just, asn )
   = unlines' [ trAsn asn

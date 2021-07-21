@@ -18,6 +18,7 @@ module AbstractUI
 , assumeConjecture, demoteLaw
 , newProof1, newProof2, resumeProof
 , abandonProof, saveProof, completeProof
+, observeProver
 , moveFocusDown, moveFocusUp, moveConsequentFocus
 , moveFocusToHypothesis, moveFocusFromHypothesis
 , matchFocus, matchFocusAgainst
@@ -45,6 +46,7 @@ import Data.List
 
 import Utilities
 import LexBase
+import LiveProofs
 import Variables
 import SideCond
 import Assertions
@@ -60,6 +62,7 @@ import REqState
 import Persistence
 import Ranking
 
+import NiceSymbols
 import TestRendering
 
 import Debug.Trace
@@ -396,6 +399,22 @@ completeProof reqs liveProof
         upgrade = upgradeConj2Law thnm cjnm
 \end{code}
 
+\subsection{Displaying Proof-State}
+\begin{code}
+observeProver :: LiveProof -> [String]
+observeProver liveProof =
+    [ "Proof for " ++ red (widthHack 2 $ conjName liveProof)
+    , "\t" ++ green (trTerm 0 trm ++ "  " ++ trSideCond sc)
+    , "by " ++ strategy liveProof ]
+    ++  (map shLiveStep $ reverse $ stepsSoFar liveProof)
+    ++  [ " ..."
+        , displayMatches (mtchCtxts liveProof) (matches liveProof)]
+    ++  [ underline "           "
+        , dispSeqZip (fPath liveProof) (conjSC liveProof) (focus liveProof)
+        , "" ]
+  where (trm,sc) = unwrapASN $ conjecture liveProof
+\end{code}
+
 \subsection{Modifying Proof-State (\texttt{LiveProofs})}
 
 \subsubsection{Moving Focus Down}
@@ -445,7 +464,6 @@ moveConsequentFocus liveProof
                          liveProof )
         else fail "Not in consequent"
 \end{code}
-
 
 \subsubsection{Focus into Hypotheses}
 
