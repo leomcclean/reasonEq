@@ -724,18 +724,18 @@ disp2set i (st:sts) = "{ "++ disp2 (i+2) st ++ disp2c i sts ++ " }"
 \subsubsection{Removing ANSI Colour-tags}
 
 \begin{code}
-colourList = ["[30m"
-             ,"[31m"
-             ,"[32m"
-             ,"[33m"
-             ,"[34m"
-             ,"[35m"
-             ,"[36m"
-             ,"[37m"
-             ,"[4m" -- underline
-             ,"[3m" -- italic
-             ,"[1m" -- bold
-             ,"[0m"]
+colourList = [("[30m","#£000000#")
+             ,("[31m","#£ff0000#")
+             ,("[32m","#£00ff00#")
+             ,("[33m","#£ffff00#")
+             ,("[34m","#£00ccff#")
+             ,("[35m","#£9b59b6#")
+             ,("[36m","#£00ffcc#")
+             ,("[37m","#£ffffff#")
+             ,("[4m","#£ignore#")
+             ,("[3m","#£ignore#")
+             ,("[1m","#£ignore#")
+             ,("[0m","#£col#")]
 
 -- we don't just strip the ANSI because we want to add our own colours
 cleanANSI :: [String] -> [String]
@@ -744,9 +744,16 @@ cleanANSI input   = map stripANSI $ replaceANSI input
 replaceANSI :: [String] -> [String]
 replaceANSI []      = []
 replaceANSI (x:xs)  = if "[0m" `isInfixOf` x
-                            then swapColours x colourList : ys
+                            then map (filter (/='\ESC')) 
+                              $ swapColours2 x colourList : ys
                             else x : ys
                               where ys = replaceANSI xs
+
+swapColours2 text []        = text
+swapColours2 text [tag]     = swapColTag text tag
+swapColours2 text (tag:xs)  = swapColours2 (swapColTag text tag) xs
+
+swapColTag text (x,y) = concat $ intersperse y $ splitOn x text
 
 swapColours :: String -> [String] -> String
 swapColours text []       = text
@@ -754,5 +761,5 @@ swapColours text [tag]    = addColFlag text tag
 swapColours text (tag:xs) = swapColours (addColFlag text tag) xs
 
 addColFlag :: String -> String -> String
-addColFlag text tag = concat $ map (filter (/='\ESC')) $ intersperse "#col#" $ splitOn tag text
+addColFlag text tag = concat $ map (filter (/='\ESC')) $ intersperse "#col" $ splitOn tag text
 \end{code}

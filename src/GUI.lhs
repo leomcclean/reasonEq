@@ -152,7 +152,7 @@ mkMainInterface reqs workspace prevOutput = do
                   , mkJSButton "Show Settings" $ _show [observeSettings reqs]
                   , mkJSButton "Show Workspaces" $ (createJS True workspace) ++ (displayJS "showBtnBox" False)]
                   where _show output  = (createJS True output) ++ (hideJS reqBoxes "")
-                        _liveProofs   = (colourJS (cleanANSI $ observeLiveProofs reqs) htmlPurple "")
+                        _liveProofs   = (colourJS $ cleanANSI $ observeLiveProofs reqs)
                                         ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
 
     -- various sub-menus that become available for user input
@@ -258,7 +258,7 @@ mkProofInterface (reqs,lp) = do
                   , mkJSButton "Show Settings" $ _show [observeSettings reqs]
                   , mkJSButton "Show Workspaces" $ displayJS "showBtnBox" False]
                   where _show output  = (createJS True output) ++ (hideJS reqBoxes "")
-                        _liveProofs   = (colourJS (cleanANSI $ observeLiveProofs reqs) htmlPurple "")
+                        _liveProofs   = (colourJS $ cleanANSI $ observeLiveProofs reqs)
                                         ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
 
   controlBox <- mkOutput reqs []
@@ -570,7 +570,7 @@ guiProverIntro :: LiveProof -> UI ()
 guiProverIntro lp = execJS proofIntro
   where proverText = cleanANSI $ eliminateSChar $ unlines $ observeProver lp
         cleanIntro = "Prover Starting..." : proverText
-        proofIntro = gapBrackets $ parseProverEntry cleanIntro  1 
+        proofIntro = gapBrackets $ colourJS cleanIntro
   
 matchLawCommand :: String -> (REqState, LiveProof) -> UI (REqState, LiveProof)
 matchLawCommand "" (reqs, liveProof)
@@ -619,14 +619,6 @@ parseProofs :: [String] -> [String]
 parseProofs proofs  = map (\(_:_:xs) -> trim $ head $ splitOn "@" xs)
                       $ map trim $ tail proofs
 
--- function to colour certain lines of the default prover entry text
-parseProverEntry :: [String] -> Int -> JavaScript
-parseProverEntry (x:y:xs) 1 = (colourJS [x,y] htmlRed "") ++ (parseProverEntry xs 2) ++ htmlBr 
-parseProverEntry (x:xs) 2   = (colourJS [x] htmlLime "") ++ (parseProverEntry xs 3) ++ htmlBr
-parseProverEntry xs 4       = (colourJS xs htmlPurple "") ++ htmlBr
-parseProverEntry xs 3       = (parseProverEntry (init xs) 4) ++ (colourJS [last xs] htmlRed "") ++ htmlBr
-parseProverEntry _ _        = ""
-
 -- [] stlye brackets don't show a gap in the GUI, so we add one
 gapBrackets :: JavaScript -> JavaScript
 gapBrackets js = intercalate "[ ]" $ splitOn "[]" js
@@ -645,10 +637,6 @@ reqBoxes = [ "showBtnBox", "setTheoryBox", "newConjBox", "newProofBox"
             , "fUpdateTBox", "sequentBox", "settingsBox" ]
 
 proveBoxes =  [""]
-
-htmlPurple  = "#9b59b6"
-htmlRed     = "#ff0000"
-htmlLime    = "#00ff00"
 
 customConfig port = UI.defaultConfig {jsPort = Just port, jsStatic = Just "./static"}
 \end{code}

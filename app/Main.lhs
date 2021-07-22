@@ -819,8 +819,8 @@ leaveHypothesis :: REPLCmd (REqState, LiveProof)
 leaveHypothesis _ = tryDelta moveFocusFromHypothesis
 \end{code}
 
-
 \newpage
+
 Law Matching
 \begin{code}
 matchLawDescr = ( "m"
