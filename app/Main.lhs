@@ -860,13 +860,11 @@ showMatchesDescr = ( "shr"
 
 showMatchesCommand :: REPLCmd (REqState, LiveProof)
 showMatchesCommand args (reqs, liveProof)
-  =  do putStrLn $ unlines' $ map (show . mRepl) moi
+  =  do putStrLn $ unlines' $ observeMatches n liveProof
         waitForReturn
         return (reqs, liveProof)
-  where
-    n = args2int args
-    mtchs = matches liveProof
-    moi = if n > 0 then take n mtchs else mtchs
+  where n = args2int args
+
 \end{code}
 
 Showing proof settings:
@@ -909,8 +907,8 @@ tryMatch args state@( reqs, liveProof)
                 , "Instantiated Law = " ++ trTerm 0 tPasC
                 , "Instantiated Law S.C. = " ++ trSideCond scP'
                 , "Goal S.C. = " ++ trSideCond (conjSC liveProof)
-                , "Discharged Law S.C. = " ++ trSideCond scP']
-         But msgs -> putStrLn $ unlines' ( (banner ++ " failed!") : msgs )
+                , "Discharged Law S.C. = " ++ trSideCond scP' ]
+         But msgs -> putStrLn $ unlines' ( (banner ++ " failed!" ++ show parts) : msgs )
        userPause
        return state
   where
@@ -969,7 +967,6 @@ applyMatch args pstate@(reqs, liveProof)
            fixFloatLVars mtch' gvars lstvars
 \end{code}
 
-
 \newpage
 Normalise Quantifiers
 \begin{code}
@@ -1027,7 +1024,6 @@ substituteCommand _ state@(reqs, liveProof)
              return (reqs, matches_ [] liveProof)
 \end{code}
 
-
 \newpage
 Flattening grouped equivalences:
 \begin{code}
@@ -1039,7 +1035,6 @@ flatEquiv :: REPLCmd (REqState, LiveProof)
 flatEquiv _ state@(reqs, _)
   = tryDelta (flattenAssociative $ theEqv $ logicsig reqs) state
 \end{code}
-
 
 Re-grouping flattened equivalences:
 \begin{code}

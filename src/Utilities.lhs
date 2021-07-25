@@ -732,34 +732,49 @@ colourList = [("[30m","#£000000#")
              ,("[35m","#£9b59b6#")
              ,("[36m","#£00ffcc#")
              ,("[37m","#£ffffff#")
-             ,("[4m","#£ignore#")
-             ,("[3m","#£ignore#")
-             ,("[1m","#£ignore#")
              ,("[0m","#£col#")]
+otherList = ["[4m","[3m","[1m"]
 
 -- we don't just strip the ANSI because we want to add our own colours
 cleanANSI :: [String] -> [String]
-cleanANSI input   = map stripANSI $ replaceANSI input
+cleanANSI input = map stripANSI $ replaceANSI input
 
 replaceANSI :: [String] -> [String]
 replaceANSI []      = []
 replaceANSI (x:xs)  = if "[0m" `isInfixOf` x
-                            then map (filter (/='\ESC')) 
-                              $ swapColours2 x colourList : ys
-                            else x : ys
-                              where ys = replaceANSI xs
+                      then map (filter (/='\ESC'))
+                        $ swapColours y colourList : ys
+                      else x : ys
+                        where ys  = replaceANSI xs
+                              y   = removeOtherANSI x
 
-swapColours2 text []        = text
-swapColours2 text [tag]     = swapColTag text tag
-swapColours2 text (tag:xs)  = swapColours2 (swapColTag text tag) xs
+-- we also have to remove the 'bold', and 'underline' tags
+removeOtherANSI :: String -> String
+removeOtherANSI text = removeOtherANSIr otherList text
 
+removeOtherANSIr :: [String] -> String -> String
+removeOtherANSIr [] text      = text
+removeOtherANSIr (x:xs) text  = if x `isInfixOf` text
+                                then removeOtherANSIr xs fixed_text 
+                                else removeOtherANSIr xs text
+  where fixed_text = fixOther $ splitOn x text
+
+-- remove matching instance of ANSI end code
+-- z accounts for the possiblity for a beginning end code
+fixOther :: [String] -> String
+fixOther (x:y:xs) = concat [x, removeNextEndTag y, fixOther xs]
+fixOther []       = ""
+
+removeNextEndTag ('[':'0':'m':xs) = xs
+removeNextEndTag (x:xs)           = x : removeNextEndTag xs
+removeNextEndTag ""               = ""
+
+-- finally we interchange the terminal tags with the almost HTML colour codes
+swapColours :: String -> [(String, String)] -> String
+swapColours text []        = text
+swapColours text [tag]     = swapColTag text tag
+swapColours text (tag:xs)  = swapColours (swapColTag text tag) xs
+
+swapColTag :: String -> (String, String) -> String
 swapColTag text (x,y) = concat $ intersperse y $ splitOn x text
-
-swapColours :: String -> [String] -> String
-swapColours text []       = text
-swapColours text [tag]    = addColFlag text tag
-swapColours text (tag:xs) = swapColours (addColFlag text tag) xs
-
-addColFlag :: String -> String -> String
-addColFlag text tag = concat $ map (filter (/='\ESC')) $ intersperse "#col" $ splitOn tag text
 \end{code}

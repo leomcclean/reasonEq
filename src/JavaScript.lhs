@@ -7,7 +7,7 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 \begin{code}
 module JavaScript
 ( JavaScript
-, modifyDOM, createJS, colourJS
+, createJS, colourJS
 , eliminateSChar
 , htmlBr, autoScroll, setPlaceholder
 , showOneEle, displayJS, hideJS
@@ -20,10 +20,7 @@ import Data.List
 import Data.List.Split
 \end{code}
 
-\subsection{All the ugly JS functions}
-
-Ideally this is all replaced with a nice usage of IORef,
-but for the moment an ugly solution is better than no solution.
+\subsection{Building JS functions}
 
 \begin{code}
 -- simple types to make code more clear
@@ -32,35 +29,28 @@ type Colour = String
 
 -- top level function that creates a series of JS statements to manipulate the HTML DOM
 createJS :: Bool -> [String] ->JavaScript
-createJS br s = if br
-                then code ++ autoScroll ++ htmlBr
-                else code ++ autoScroll
-                  where code = concat $ map modifyDOM $ eliminateSChar $ unlines s 
+createJS br s = if br then result ++ htmlBr else result
+  where base    = concat $ map appendOutput $ eliminateSChar $ unlines s 
+        result  = base ++ autoScroll
 
 -- delimit a string on newline (\n) and tab (\t) characters
 -- also clean the array of empty ("") entries
 -- can clean up specific arrays on a case by case basis later
 eliminateSChar :: String -> [String]
-eliminateSChar s  = filter (not . null)
+eliminateSChar s  = map filterQuotes
+                  $ filter (\x -> x/="")
                   $ splitOn "\n"
                   $ filter (/='\t') s
 
--- recursive function to create a long string of JavaScript from an array of output text
-reduceToJS :: [String] -> JavaScript
-reduceToJS [] = []
-reduceToJS [x] = modifyDOM x
-reduceToJS (x:xs) = modifyDOM x ++ reduceToJS xs
+-- filters the three kinds of quotes that ruin JavaScript
+filterQuotes :: String -> String
+filterQuotes text = map (\x -> if or [x=='"',x=='”',x=='“'] then '\'' else x) text
 
--- the most worrying function to ever be written in Haskell
--- here we commit a sin, by being an accessory to causing a side-effect
--- by modifying the HTML DOM in this way there are a lot of headaches saved
--- however, the javascript exec() function is inherently insecure
--- we will have to sanitise all user input to avoid javascript injection (!?!?!)
-modifyDOM :: String -> JavaScript
-modifyDOM t = (createEle "para" "p")
-              ++ (setClass "para" "output")
-              ++ (setText "para" t)
-              ++ ((getElement "outputBox") `appendChild` "para")
+appendOutput :: String -> JavaScript
+appendOutput t  = (createEle "para" "p")
+                ++ (setClass "para" "output")
+                ++ (setText "para" t)
+                ++ ((getElement "outputBox") `appendChild` "para")
 
 -- JS code to automatically scroll downwards upon new output
 autoScroll :: JavaScript
@@ -111,10 +101,10 @@ colourJSr :: [String] -> JavaScript -> JavaScript
 colourJSr [] js     = js
 colourJSr [x] js    = if "#£col#" `isInfixOf` x
                       then js ++ (colourHTML x)
-                      else js ++ modifyDOM x
+                      else js ++ appendOutput x
 colourJSr (x:xs) js = if "#£col#" `isInfixOf` x
                       then colourHTML x  ++ (colourJSr xs js)
-                      else modifyDOM x    ++ (colourJSr xs js)
+                      else appendOutput x    ++ (colourJSr xs js)
 
 -- recursively path over a block of text to colour tagged text
 colourHTML _text = colourHTMLr ts $ (createEle "para" "p") ++ (setClass "para" "output")

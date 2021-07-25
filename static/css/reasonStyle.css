@@ -1,12 +1,12 @@
 body
 {
-    height: 100%;
-
+    margin: 10px;
     font-family: Arial, sans-serif;
     background-color: rgb(20, 20, 20);
 }
 
-/* Customise the scrollbar */
+/* Customise the scrollbar 
+    Unfortunately this does not appear to work inside electron */
 body::-webkit-scrollbar-track
 {
     background-color: rgb(40, 40, 40);
@@ -16,62 +16,51 @@ body::-webkit-scrollbar-track-piece
     background-color: rgb(80, 80, 80);
 }
 
-/* This contains all elements. */
+/* This contains all elements */
 .mainContainer
 {
+    height: 620px;
+    padding: 5px;
+
     display: flex;
     flex-direction: row;
-    flex-grow: 1;
-
-    padding: 5px;
-    margin-top: 5px;
-    padding: 0px;
 }
 
-/* Contains the buttons to the left of the input/output area. */
-.buttonBox
-{
-    height: 530px;
-    width: 150px;
-
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-}
-
-/* The styling of each button. */
+/* General styling for buttons */
 button
 {
-    min-width: 120px;
+    width: 160px;
     padding: 5px;
     margin: 2px;
 
     text-align: center;
     font-size: 14px;
 
-    border: solid rgb(0, 180, 0) 1px;
     border-radius: 2px;
     box-shadow: 0 2px 6px 0 rgba(0,0,0,0.2), 0 3px 10px 0 rgba(0,0,0,0.19);
 
     background-color: rgb(40, 40, 40);
     color: rgb(255, 255, 255);
 }
-button:hover { background-color: rgba(0, 180, 0, 0.5); }
 
-/* The container div for the output/input. */
+/* General styling for inputs */
+::placeholder
+{
+    color: var(--c);
+}
+
+/* The container div for the output and expanded input options */
 .controlBox
 {
-    height: 530px;
+    width: 100%;
 
     display: flex;
     flex-direction: column;
-    flex-grow: 10;
-    flex-shrink: 0;
 
-    margin-left: 10px;
+    margin-right: 10px;
 }
 
-/* Our 'terminal' style text output. */
+/* Our 'terminal' style text output */
 .outputBox
 {
     height: 100%;
@@ -82,8 +71,8 @@ button:hover { background-color: rgba(0, 180, 0, 0.5); }
 
     display: flex;
     flex-direction: column;
-    overflow-x: hidden;
     overflow-y: scroll;
+    overflow-wrap: break-word;
     
     font-size: 16px;
 
@@ -92,7 +81,7 @@ button:hover { background-color: rgba(0, 180, 0, 0.5); }
     background-color: rgb(40, 40, 40);
 }
 /* A dummy element to work around vertical scrolling and
-flex-box's 'justify-content' attribute not working. */
+flex-box's 'justify-content' attribute not working */
 #initOutput
 {
     margin-top: auto !important;
@@ -106,10 +95,6 @@ flex-box's 'justify-content' attribute not working. */
 
     color: rgb(255, 255, 255);
 }
-
-/* Styling for all input boxes */
-input:focus { border: solid rgb(0, 180, 0) 2px; }
-input::placeholder { color: var(--c, rgb(40, 40, 40)); }
 
 /* The styling for the titles of the overlay divs */
 .divTitle
@@ -126,7 +111,7 @@ input::placeholder { color: var(--c, rgb(40, 40, 40)); }
 {
     margin: 3px;
     padding: 2px 5px;
-    right: 175px;
+    right: 210px;
     box-sizing: border-box;
 
     position: absolute;
@@ -177,17 +162,19 @@ input::placeholder { color: var(--c, rgb(40, 40, 40)); }
     width: 200px;
     box-sizing: border-box;
 
+    font-size: 16px;
     padding: 2px;
     margin: 2px;
 }
 .overlayInput:focus { border: solid rgb(40, 180, 180) 2px; }
 /* Special consideration for certain divs given their long option texts */
-#returnBox.button {width: 300px}
+#returnBox button { width: 275px }
+#demoteBox button { width: 290px }
 
 /* The styling for the flags */
 .flag
 {
-    width: 10%;
+    width: 150px;
     height: 30px;
     display: none;
     justify-content: center;
@@ -196,27 +183,48 @@ input::placeholder { color: var(--c, rgb(40, 40, 40)); }
 
     border-radius: 0px 0px 5px 5px;
 
-    font-size: 18px;
+    font-size: 16px;
     font-weight: bold;
     color: rgba(255, 255, 255, 0.9);
 }
 /* The styling for the REqState flags */
 #modifiedFlag
 {
-    left: 22%;
+    left: 167px;
     background-color: rgba(180, 40, 40, 0.8);
 }
 #devFlag
 {
-    left: 35%;
+    left: 327px;
     background-color: rgba(180, 40, 180, 0.8);
 }
 #currTheoryFlag
 {
     display: flex;
-    width: 20%;
-    left: 2%;
+    left: 17px;
     background-color: rgba(0, 180, 0, 0.8);
 
-    border-radius: 5px 0px 5px 5px;
+    border-radius: 5px 0px 5px 0px;
 }
+
+/* Contains the primary set of buttons */
+.mainButtonBox
+{
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+/* The styling of the primary buttons */
+.mainButtonBox button { border: solid rgb(0, 180, 0) 1px; }
+.mainButtonBox button:hover { background-color: rgba(0, 180, 0, 0.5); }
+
+/* Contains the prover set of buttons */
+.proverButtonBox
+{
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+/* The styling of the prover buttons */
+.proverButtonBox button { border: solid rgb(180, 0, 0) 1px; }
+.proverButtonBox button:hover { background-color: rgba(180, 0, 0, 0.5); }

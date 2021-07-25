@@ -21,7 +21,7 @@ module AbstractUI
 , observeProver
 , moveFocusDown, moveFocusUp, moveConsequentFocus
 , moveFocusToHypothesis, moveFocusFromHypothesis
-, matchFocus, matchFocusAgainst
+, observeMatches, matchFocus, matchFocusAgainst
 , applyMatchToFocus1, applyMatchToFocus3
 , applyMatchToFocus2Std, applyMatchToFocus2Lst
 , normQuantFocus
@@ -401,10 +401,11 @@ completeProof reqs liveProof
 
 \subsection{Displaying Proof-State}
 \begin{code}
+-- Leo added theis
 observeProver :: LiveProof -> [String]
 observeProver liveProof =
     [ "Proof for " ++ red (widthHack 2 $ conjName liveProof)
-    , "\t" ++ green (trTerm 0 trm ++ "  " ++ trSideCond sc)
+    , "\t" ++ green (trTerm 0 trm ++ "  " ++ trSideCond _sc)
     , "by " ++ strategy liveProof ]
     ++  (map shLiveStep $ reverse $ stepsSoFar liveProof)
     ++  [ " ..."
@@ -412,7 +413,7 @@ observeProver liveProof =
     ++  [ underline "           "
         , dispSeqZip (fPath liveProof) (conjSC liveProof) (focus liveProof)
         , "" ]
-  where (trm,sc) = unwrapASN $ conjecture liveProof
+  where (trm,_sc) = unwrapASN $ conjecture liveProof
 \end{code}
 
 \subsection{Modifying Proof-State (\texttt{LiveProofs})}
@@ -430,7 +431,6 @@ moveFocusDown i liveProof
                     $ fPath__ (++[i'])
                     $ matches_ [] liveProof )
         else fail ("No sub-term "++show i')
-
 \end{code}
 
 \subsubsection{Moving Focus Up}
@@ -509,6 +509,16 @@ moveFocusFromHypothesis liveProof
 \end{code}
 
 \subsubsection{Match Laws against Focus}
+
+Show matches.
+\begin{code}
+-- Leo added this
+observeMatches :: Int -> LiveProof -> [String]
+observeMatches arg lp = map (show . mRepl) moi
+  where 
+    mtchs = matches lp
+    moi = if arg > 0 then take arg mtchs else mtchs
+\end{code}
 
 First, matching all laws.
 \begin{code}
