@@ -38,18 +38,16 @@ For new users, we recommend the following procedure:
 
 Simply typing `req` anywhere will open the application, with the `MyReasonEq` directory as the current workspace.
 
-## Using `req`
-
-General help can be obtained by typing `help` or `?` at the command prompt. 
-This will list the available commands. Typing `help` or `?` followed, after a space, by a command name
-will give more details about that command.
-
-The program will automatically save your work on exit, however you can save at anytime with the `save` command.
-
 ## Running the `reasonEq` GUI
 
 reasonEq can be run in a web browser window using the `g` launch argument, or in a standalone electron instance.
 To perform the electron installation on Windows, we recommend using the `PowerShell` terminal as opposed to the traditional `cmd` terminal.
+
+### Important note on Windows usage
+
+A dependency of the GUI library `threepenny-gui`, `posix-regex`, has an extension that currently requires an extra flag to be installed by stack on Windows. This flag cannot be included in a linux or macOS installation as it does not exist for the library in those OSs.
+To compile on Windows, you must use `cabal install regex-posix -f _regex-posix-clib` or otherwise amend the .cabal file to correctly install the dependency.
+
 To prepare the application for running in an electron instance, we recommend the following procedure:
 
 ### First time
@@ -64,6 +62,14 @@ The following steps assume that the above steps have already been performed once
 
 1. Install the `electron-packager` tool using `npm install electron-packager`.
 2. Compile the executable file using the command `npm run pack-app`.
+
+## Using `req`
+
+General help can be obtained by typing `help` or `?` at the command prompt. 
+This will list the available commands. Typing `help` or `?` followed, after a space, by a command name
+will give more details about that command.
+
+The program will automatically save your work on exit, however you can save at anytime with the `save` command.
 
 ### Second and subsequent times
 

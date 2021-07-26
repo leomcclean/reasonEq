@@ -287,7 +287,7 @@ mkProofInterface (reqs,lp) = do
     -- list of primary control buttons
     -- right hand primary buttons
     ctrlBtnList :: [UI Element]
-    ctrlBtnList = [ mkJSButton "Show Context" $ showOneEle proverBoxes "showBtnBox"
+    ctrlBtnList = [ mkJSButton "Show Context" showCode
                   , liveproofButton "Up" moveFocusUp (reqs,lp)
                   , liveproofInputButton "Down" "1" moveFocusDown (reqs,lp)
                   , mkJSButton "Try Match Focus" $ showOneEle proverBoxes "tryMatchBox"
@@ -298,15 +298,23 @@ mkProofInterface (reqs,lp) = do
                   , liveproofArgButton "Substitute" [] False guiSubstitute (reqs,lp)
                   , element flattenEquivButton
                   -- currently no instantiate button implemented, confused on function
-                  , mkJSButton "Group Equivalences" $ showOneEle proverBoxes "groupEquivBox"
+                  , mkJSButton "Group Equivalences" equivCode
                   , liveproofButton "Switch Hypothesis" moveConsequentFocus (reqs,lp)
                   , mkJSButton "To Hypothesis"            $ displayJS "showBtnBox" False -- need to understand input
-                  , mkJSButton "Clone Hypothesis" $ showOneEle proverBoxes "cloneBox"
-                  , mkJSButton "Equivale Theorem" $ showOneEle proverBoxes "equivaleBox"
+                  , mkJSButton "Clone Hypothesis" cloneCode
+                  , mkJSButton "Equivale Theorem" equivaleC
                   , liveproofButton "Leave Hypothesis" moveFocusFromHypothesis (reqs,lp)
                   , liveproofInputButton "Go Back" "1" stepBack (reqs,lp)
                   , mkJSButton "Clear Output" $ clearOutput proverBoxes ++ guiProverText lp
                   , mkJSButton "Quit" $ showOneEle proverBoxes "quitBtnBox" ]
+                    where showCode  = showOneEle proverBoxes "showBtnBox"
+                            ++ setPlaceholder "showMatchesInput" "Match Name..."
+                          equivCode = showOneEle proverBoxes "groupEquivBox"
+                            ++ setPlaceholder "groupEquivInput" "Number of Terms..."
+                          cloneCode = showOneEle proverBoxes "cloneBox"
+                            ++ setPlaceholder "cloneInput" "Hyposthesis..."
+                          equivaleC = showOneEle proverBoxes "equivaleBox"
+                            ++ setPlaceholder "equivaleInput" "Equivale Name..."
     -- list of 'Show' related buttons
     showBtnList :: [UI Element]
     showBtnList = [ mkJSButton "List Laws" $ _show [observeLawsInScope lp]
