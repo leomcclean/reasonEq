@@ -46,6 +46,25 @@ will give more details about that command.
 
 The program will automatically save your work on exit, however you can save at anytime with the `save` command.
 
+## Running the `reasonEq` GUI
+
+reasonEq can be run in a web browser window using the `g` launch argument, or in a standalone electron instance.
+To perform the electron installation on Windows, we recommend using the `PowerShell` terminal as opposed to the traditional `cmd` terminal.
+To prepare the application for running in an electron instance, we recommend the following procedure:
+
+### First time
+
+1. Install the pre-requesite JavaScript libraries using `npm install`.
+2. Compile the `req` binary to a local location using stack: `stack install --local-bin-path build/`.
+3. Start the electron process with command `./node_modules/.bin/electron electron.js`.
+
+### Compiling a stand-alone executable
+
+The following steps assume that the above steps have already been performed once.
+
+1. Install the `electron-packager` tool using `npm install electron-packager`.
+2. Compile the executable file using the command `npm run pack-app`.
+
 ### Second and subsequent times
 
 Once started for the second time or subsequent times, your current workspace will be automatically loaded.

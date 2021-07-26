@@ -25,6 +25,7 @@ function createWindow() {
     height: 650,
     useContentSize: true,
     webPreferences: { nodeIntegration: true },
+    icon:"static/icon.png"
   });
 
   console.log("Loading URL: " + url);
