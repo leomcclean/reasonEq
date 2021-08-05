@@ -18,7 +18,7 @@ module AbstractUI
 , assumeConjecture, demoteLaw
 , newProof1, newProof2, resumeProof
 , abandonProof, saveProof, completeProof
-, observeProver
+, observeProver, observeCurrentMatches
 , moveFocusDown, moveFocusUp, moveConsequentFocus
 , moveFocusToHypothesis, moveFocusFromHypothesis
 , observeMatches, matchFocus, matchFocusAgainst
@@ -401,19 +401,22 @@ completeProof reqs liveProof
 
 \subsection{Displaying Proof-State}
 \begin{code}
--- Leo added theis
+-- Leo added these
 observeProver :: LiveProof -> [String]
 observeProver liveProof =
     [ "Proof for " ++ red (widthHack 2 $ conjName liveProof)
     , "\t" ++ green (trTerm 0 trm ++ "  " ++ trSideCond _sc)
     , "by " ++ strategy liveProof ]
     ++  (map shLiveStep $ reverse $ stepsSoFar liveProof)
-    ++  [ " ..."
-        , displayMatches (mtchCtxts liveProof) (matches liveProof)]
+    ++  [ " ..."]
+    ++  [ observeCurrentMatches liveProof ]
     ++  [ underline "           "
         , dispSeqZip (fPath liveProof) (conjSC liveProof) (focus liveProof)
         , "" ]
   where (trm,_sc) = unwrapASN $ conjecture liveProof
+
+observeCurrentMatches :: LiveProof -> String
+observeCurrentMatches lp = displayMatches (mtchCtxts lp) (matches lp)
 \end{code}
 
 \subsection{Modifying Proof-State (\texttt{LiveProofs})}
@@ -549,7 +552,7 @@ matchFocusAgainst lawnm theSig liveProof
             But msgs  -> fail $ unlines msgs
 \end{code}
 
-Third, a deep dive to apply \texttt{match} so we can get back errors.
+Third, a deep dive to apply \texttt{match} so we can > m ( VarList, VarList, VarList, [Term], Match )back errors.
 \begin{code}
 tryFocusAgainst :: String -> [Int] -> LogicSig -> LiveProof
                 -> YesBut (Binding,Term,SideCond,SideCond)

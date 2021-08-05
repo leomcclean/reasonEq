@@ -23,6 +23,22 @@ See <https://docs.haskellstack.org/en/stable/README/>. You are strongly advised 
 
 4. Give command `stack install` and wait. The first time you run this might take a while as it may install a local version of the Haskell compiler and required libraries. When it is done it will have installed a program called `req`.
 
+## Optional Steps for standalone GUI installation
+
+1. Install the pre-requesite JavaScript libraries using `npm install`.
+
+2. Install the `electron-packager` tool using `npm install electron-packager`.
+
+3. Compile the `req` binary to a local location using stack: `stack install --local-bin-path build/`.
+
+4. Compile the executable file using the command `npm run pack-app`.
+
+#### Important note on Windows usage
+
+A dependency, `posix-regex`, currently requires an extra flag to be installed by stack on Windows.
+This flag cannot be included in a linux or macOS installation as it does not exist for the library in those OSs.
+To compile on Windows, you must use `cabal install regex-posix -f _regex-posix-clib` or otherwise amend the .cabal file to correctly install the dependency.
+
 ## Running `reasonEq`/`req`
 
 For new users, we recommend the following procedure:
@@ -38,30 +54,10 @@ For new users, we recommend the following procedure:
 
 Simply typing `req` anywhere will open the application, with the `MyReasonEq` directory as the current workspace.
 
-## Running the `reasonEq` GUI
+### Running the `reasonEq` GUI
 
-reasonEq can be run in a web browser window using the `g` launch argument, or in a standalone electron instance.
-To perform the electron installation on Windows, we recommend using the `PowerShell` terminal as opposed to the traditional `cmd` terminal.
-
-### Important note on Windows usage
-
-A dependency of the GUI library `threepenny-gui`, `posix-regex`, has an extension that currently requires an extra flag to be installed by stack on Windows. This flag cannot be included in a linux or macOS installation as it does not exist for the library in those OSs.
-To compile on Windows, you must use `cabal install regex-posix -f _regex-posix-clib` or otherwise amend the .cabal file to correctly install the dependency.
-
-To prepare the application for running in an electron instance, we recommend the following procedure:
-
-### First time
-
-1. Install the pre-requesite JavaScript libraries using `npm install`.
-2. Compile the `req` binary to a local location using stack: `stack install --local-bin-path build/`.
-3. Start the electron process with command `./node_modules/.bin/electron electron.js`.
-
-### Compiling a stand-alone executable
-
-The following steps assume that the above steps have already been performed once.
-
-1. Install the `electron-packager` tool using `npm install electron-packager`.
-2. Compile the executable file using the command `npm run pack-app`.
+reasonEq can be run in a web browser window using command `req -g`.
+The electron GUI can be run using `./node_modules/.bin/electron electron.js`, or through the executable (following the above optional installation steps).
 
 ## Using `req`
 

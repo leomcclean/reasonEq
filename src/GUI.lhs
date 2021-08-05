@@ -10,14 +10,17 @@ module GUI
 )
 where
 
+import Data.Char
 import Data.List
 import Data.List.Split
+import qualified Data.Set as S
 import Graphics.UI.Threepenny hiding (version, span, map, empty)
 import qualified Graphics.UI.Threepenny as UI
 import Text.Read hiding (get)
 
 import AbstractUI
 import Assertions
+import Binding
 import Dev
 import JavaScript
 import Laws
@@ -28,15 +31,16 @@ import SideCond
 import TestParsing
 import TestRendering
 import Utilities
+import Variables
 
 \end{code}
 
 \subsection{Introduction}
 
 \subsection{Main Interface Code}
-The core of the user interface is a local webserver built in HTML, with
-a seperate CSS file used to style it appropriately.
 
+The core of the user interface is a local webserver built in HTML, with
+a seperate CSS file used to style it.
 \begin{code}
 -- the base command for creating our webpage
 runServ :: Int -> REqState -> [String] -> [String] -> IO ()
@@ -45,10 +49,12 @@ runServ port reqs0 wlcmt workspace = do
     return win # set title "reasonEq"
     UI.addStyleSheet win "reasonStyle.css"
     UI.getBody win #+ [mkMainInterface reqs0 workspace []]
-    UI.runFunction $ UI.ffi $ createJS True $ wlcmt ++ ["Welcome to the reasonEq GUI"]
+    execJS $ createJS True $ wlcmt ++ ["Welcome to the reasonEq GUI"]
     return ()
 
 -- load the interface with a new REqState
+-- LiveProof is only used by the Prover interface
+-- we can use a Maybe LiveProof to share the reload function
 reloadInterface :: (REqState, Maybe LiveProof) -> UI ()
 reloadInterface (reqs,mlp) = do
   win     <- askWindow
@@ -61,7 +67,7 @@ reloadInterface (reqs,mlp) = do
     Nothing -> do
       interface <- mkMainInterface reqs [] output
       getBody win # set children [interface]
-      appendHTML [""]
+      return ()
   execJS $
     (displayJS "modifiedFlag" $ modified reqs)
     ++ (displayJS "devFlag" $ inDevMode reqs)
@@ -70,7 +76,6 @@ reloadInterface (reqs,mlp) = do
 -- this creates the interface which we further manipulate directly through the DOM
 mkMainInterface ::  REqState -> [String] -> [Element] -> UI Element
 mkMainInterface reqs workspace prevOutput = do
-
   -- relevant information loaded from REqState
   allTheories         <- return $ map trim $ splitOn ";" devListAllBuiltins
   loadedTheories      <- return $ map trim $ splitOn ";" $ observeTheoryNames reqs
@@ -84,7 +89,7 @@ mkMainInterface reqs workspace prevOutput = do
   conjTermInput       <- UI.input #. "overlayInput" # set id_ "conjTermsInput"
   settingInput        <- UI.input #. "overlayInput" # set id_ "settingInput"
 
-  -- certain unique buttons that would bloat the lists they are placed into
+  -- buttons with unique functionality
   newConjButton <- UI.button #. "button" # set text "Make New Conjecture"
   on UI.click newConjButton $ \_ -> do
     value1  <- conjNameInput # get value
@@ -97,19 +102,19 @@ mkMainInterface reqs workspace prevOutput = do
     output <- guiSaveConj reqs
     let _fix  = map (\x -> if x=='"' then '\''; else x)
         fixed = map _fix output
-    guiShow reqs $ fixed ++ ["Saved Conjectures."]
+    pushOutput $ fixed ++ ["Saved Conjectures."]
 
   matchDisplayButton <- UI.button #. "button" # set text "Change Max. Match Display"
   on UI.click matchDisplayButton  $ \_ -> do
     _value  <- settingInput # get value
     reqs1   <- modifySettings ["mmd",_value] reqs
-    guiShow reqs1 ["Changed Max. Match Display to " ++ _value]
     reloadInterface (reqs1, Nothing)
+    pushOutput ["Changed Max. Match Display to " ++ _value]
 
   quitButton <- mkJSButton "Quit" "window.close();"
   on UI.click quitButton $ \_ -> guiQuit reqs
 
-  -- aggregation of buttons/inputs to more easily create the DOM structure
+  -- aggregation of buttons/inputs that mimics the HTML DOM structure
   -- these are inside a 'let' statement to avoid unwrapping them from the UI monad
   let
     -- list of primary control buttons
@@ -130,6 +135,7 @@ mkMainInterface reqs workspace prevOutput = do
                   , mkJSButton "Change Settings" $ showOneEle reqBoxes "settingsBox"
                   , mkJSButton "Clear Output" $ clearOutput reqBoxes
                   , element quitButton]
+                  -- we fill the placeholders of input boxes to avoid leaving previous input
                   where printConjs    = createJS True ("Conjectures:" : [observeCurrConj reqs [""]])
                         newConjCode   = showOneEle reqBoxes "newConjBox"
                           ++ setPlaceholder "conjNameInput" "Conjecture Name..."
@@ -152,7 +158,7 @@ mkMainInterface reqs workspace prevOutput = do
                   , mkJSButton "Show Settings" $ _show [observeSettings reqs]
                   , mkJSButton "Show Workspaces" $ (createJS True workspace) ++ (displayJS "showBtnBox" False)]
                   where _show output  = (createJS True output) ++ (hideJS reqBoxes "")
-                        _liveProofs   = (colourJS $ cleanANSI $ observeLiveProofs reqs)
+                        _liveProofs   = (createJS True $ cleanANSI $ observeLiveProofs reqs)
                                         ++ autoScroll ++ htmlBr ++ (displayJS "showBtnBox" False)
     -- various sub-menus that become available for user input
     setTheoryList = map (\x -> reqstateButton ("Set '" ++ x ++ "'")
@@ -170,7 +176,6 @@ mkMainInterface reqs workspace prevOutput = do
                     , blankButton
                     , mkJSButton "Load Theory" $ showOneEle reqBoxes "loadTBox"
                     , mkJSButton "Load New Theory" $ showOneEle reqBoxes "loadNewTBox" ]
-    -- the only unfinished part -> do we get a relevant list of file names?
     loadConjList  = [ UI.input #. "overlayInput" # set id_ "loadConjInput"
                     , mkJSButton "Load Conjecture" $ hideJS reqBoxes ""]
     assumeList    = [ reqstateButton "Assume All Current Theory Conjectures" "." guiAssume reqs
@@ -204,6 +209,7 @@ mkMainInterface reqs workspace prevOutput = do
                                           , ("mhf", "Floating Variables", hideFloatingVariables) ]
 
     -- container divs for the buttons
+    -- note that all "overlay" divs in this list must be included in "reqBoxes"
     buttonBox     = UI.div #. "mainButtonBox" #+ ctrlBtnList
     showBtnBox    = mkMOverlayDiv "showBtnBox" "Show Context" showBtnList
     setTheoryBox  = mkMOverlayDiv "setTheoryBox" "Set Theory" setTheoryList 
@@ -239,48 +245,87 @@ mkMainInterface reqs workspace prevOutput = do
 
 mkProofInterface :: (REqState, LiveProof) -> UI Element
 mkProofInterface (reqs,lp) = do
-
   -- input boxes used
+  downInput         <- UI.input #. "overlayInput" # set id_ "downInput"
+  matchLawInput     <- UI.input #. "overlayInput" # set id_ "matchLawInput"
   showMatchesInput  <- UI.input #. "overlayInput" # set id_ "showMatchesInput"
   groupEquivInput   <- UI.input #. "overlayInput" # set id_ "groupEquivInput"
   blankInput        <- UI.input #. "overlayInput" # set value ""
+  hypothesisInput   <- UI.input #. "overlayInput" # set id_ "hypothesisInput"
   cloneInput        <- UI.input #. "overlayInput" # set id_ "cloneInput"
   equivaleInput     <- UI.input #. "overlayInput" # set id_ "equivaleInput"
 
   -- buttons with unique functionality
+  downButton <- UI.button #. "button" # set text "Down"
+  on UI.click downButton $ \_ -> do
+    _value <- downInput # get value
+    case readMaybe _value :: Maybe Int of
+      Just num  ->  case moveFocusDown num lp of
+                      Just lp1  -> reloadInterface (reqs,Just lp1)
+                      Nothing   -> pushOutput [_error ++ "Invalid step down."]
+      Nothing   ->  pushOutput [_error ++ "Input must be an integer."]
+
+  matchAllLawsButton <- UI.button #. "button" # set text "Match Law"
+  on UI.click matchAllLawsButton  $ \_ -> do
+    (mreqs, lp1) <- guiMatchLaw [] (reqs,lp)
+    case mreqs of
+      Just reqs1  -> reloadInterface (reqs1, Just lp1)
+      Nothing     -> pushOutput [_error ++ "Matching all laws failed unexpectedly."]
+
+  matchLawButton <- UI.button #. "button" # set text "Match Law"
+  on UI.click matchLawButton  $ \_ -> do
+    _value  <- matchLawInput # get value
+    (mreqs, lp1) <- guiMatchLaw [_value] (reqs,lp)
+    case mreqs of
+      Just reqs1  -> reloadInterface (reqs1, Just lp1)
+      Nothing     -> pushOutput [_error ++ "Input was not a matchable law."]
+
   showMatchesButton <- UI.button #. "button" # set text "Show Match Replacements"
   on UI.click showMatchesButton  $ \_ -> do
     _value  <- showMatchesInput # get value
     case readMaybe _value :: Maybe Int of
-      Just num  -> guiShow reqs $ observeMatches num lp
-      Nothing   -> guiShow reqs ["Input must be an integer."]
+      Just num  -> pushOutput $ observeMatches num lp
+      Nothing   -> pushOutput [_error ++ "Input must be an integer."]
 
   flattenEquivButton <- UI.button #. "button" # set text "Flatten Equivalences"
   on UI.click flattenEquivButton $ \_ -> do
     case guiFlatEquiv (reqs,lp) of
-      Nothing   -> appendHTML ["Flatten Equivalences returned Nothing."]
       Just lp1  -> reloadInterface (reqs, Just lp1)
+      Nothing   -> return ()
+
+  hypothesisButton <- UI.button #. "button" # set text "Down"
+  on UI.click hypothesisButton $ \_ -> do
+    _value <- hypothesisInput # get value
+    case readMaybe _value :: Maybe Int of
+      Just num  ->  case moveFocusToHypothesis num lp of
+                      Just lp1  -> reloadInterface (reqs,Just lp1)
+                      Nothing   -> pushOutput [_error ++ "Invalid hypothesis."]
+      Nothing   ->  pushOutput [_error ++ "Input must be an integer."]
 
   cloneButton <- UI.button #. "button" # set text "Flatten Equivalences"
   on UI.click cloneButton $ \_ -> do
     _value <- cloneInput # get value
     case guiCloneHypotheses [_value] (reqs,lp) of
-      Nothing   -> appendHTML ["Clone Hypotheses returned Nothing."]
       Just lp1  -> reloadInterface (reqs, Just lp1)
+      Nothing   -> return ()
 
   equivaleButton <- UI.button #. "button" # set text "Equivale Theorem"
   on UI.click equivaleButton $ \_ -> do
     _value <- equivaleInput # get value
     (output,reqs1,lp1) <- guiEquivale [_value] (reqs,lp)
     reloadInterface (reqs1,Just lp1)
-    appendHTML [output]
+    pushOutput [output]
 
   quitButton <- UI.button #. "button" # set text "Abandon"
   on UI.click quitButton  $ \_ -> do
+    win <- askWindow
+    getBody win # set children []
     reloadInterface (abandonProof reqs lp, Nothing)
 
   saveButton <- UI.button #. "button" # set text "Save and Exit"
   on UI.click saveButton  $ \_ -> do
+    win <- askWindow
+    getBody win # set children []
     reloadInterface (saveProof reqs lp, Nothing)
 
   let
@@ -289,18 +334,18 @@ mkProofInterface (reqs,lp) = do
     ctrlBtnList :: [UI Element]
     ctrlBtnList = [ mkJSButton "Show Context" showCode
                   , liveproofButton "Up" moveFocusUp (reqs,lp)
-                  , liveproofInputButton "Down" "1" moveFocusDown (reqs,lp)
+                  , mkJSButton "Down" downCode
                   , mkJSButton "Try Match Focus" $ showOneEle proverBoxes "tryMatchBox"
-                  , mkJSButton "Apply Match"              $ displayJS "showBtnBox" False -- need to understand secondary input
-                  , mkJSButton "Match Laws" $ showOneEle proverBoxes "matchLawBox"
+                  , mkJSButton "Apply Match" $ showOneEle proverBoxes "applyMatchBox"
+                  , mkJSButton "Match Laws" matchCode
                   , liveproofArgButton "Normalise Quantifiers" [] False guiNormQuant (reqs,lp)
                   , liveproofArgButton "Simplify Nested Q" [] False guiSimpNest (reqs,lp)
                   , liveproofArgButton "Substitute" [] False guiSubstitute (reqs,lp)
                   , element flattenEquivButton
-                  -- currently no instantiate button implemented, confused on function
+                  -- currently no instantiate button implemented due to difficulty in collecting inputs simaltaneously
                   , mkJSButton "Group Equivalences" equivCode
                   , liveproofButton "Switch Hypothesis" moveConsequentFocus (reqs,lp)
-                  , mkJSButton "To Hypothesis"            $ displayJS "showBtnBox" False -- need to understand input
+                  , mkJSButton "To Hypothesis" hypothesisCode
                   , mkJSButton "Clone Hypothesis" cloneCode
                   , mkJSButton "Equivale Theorem" equivaleC
                   , liveproofButton "Leave Hypothesis" moveFocusFromHypothesis (reqs,lp)
@@ -309,12 +354,18 @@ mkProofInterface (reqs,lp) = do
                   , mkJSButton "Quit" $ showOneEle proverBoxes "quitBtnBox" ]
                     where showCode  = showOneEle proverBoxes "showBtnBox"
                             ++ setPlaceholder "showMatchesInput" "Match Name..."
+                          matchCode = showOneEle proverBoxes "matchLawBox"
+                            ++ setPlaceholder "matchLawInput" "Match Law..."
                           equivCode = showOneEle proverBoxes "groupEquivBox"
                             ++ setPlaceholder "groupEquivInput" "Number of Terms..."
+                          hypothesisCode = showOneEle proverBoxes "hypothesisBox"
+                            ++ setPlaceholder "hypothesisInput" "Hypothesis number..."
                           cloneCode = showOneEle proverBoxes "cloneBox"
                             ++ setPlaceholder "cloneInput" "Hyposthesis..."
                           equivaleC = showOneEle proverBoxes "equivaleBox"
                             ++ setPlaceholder "equivaleInput" "Equivale Name..."
+                          downCode  = showOneEle proverBoxes "downBox"
+                            ++ setPlaceholder "downInput" "Navigate down to..."
     -- list of 'Show' related buttons
     showBtnList :: [UI Element]
     showBtnList = [ mkJSButton "List Laws" $ _show [observeLawsInScope lp]
@@ -325,9 +376,15 @@ mkProofInterface (reqs,lp) = do
                   , element showMatchesButton ]
                   where _show output  = (createJS True output) ++ (hideJS proverBoxes "")
     -- various sub-menus that become available for user input
-    matchLawList    = [ liveproofArgButton "Match All Laws" [] True guiMatchLaw (reqs,lp) ] ++ 
-                      ( map (\x -> liveproofArgButton ("Match '" ++ x ++ "'") [x]
-                        True guiMatchLaw (reqs,lp)) ["not","currently","functional"]) -- parseMatchLaws $ observeMatchLaws lp)
+    downList        = [ element downInput, element downButton]
+    -- there will only be matches to apply when matches have been made
+    applyMatchList  = if topend /= 0
+                      then  ( map (\x -> applyMatchButton ("Match Law #'" ++ x ++ "'") (read x)
+                              guiApplyMatch (reqs,lp)) $ numlist topend)
+                      else  []
+                      where topend  = (length $ parseMatchLaws $ observeCurrentMatches lp) - 1
+                            numlist x = map show [x, x-1..1]
+    matchLawList    = [ element matchAllLawsButton, blankButton, element matchLawInput, element matchLawButton]
     tryMatchList    = map (\x -> liveproofArgButton ("Try '" ++ x ++ "'") [x]
                         False guiTryMatch (reqs,lp)) $ pparseLaws $ observeLawsInScope lp
     groupEquivList  = [ groupEquivButton "Associate to the Left" ["r"] blankInput guiGroupEquiv (reqs,lp)
@@ -336,23 +393,29 @@ mkProofInterface (reqs,lp) = do
                       , groupEquivButton "Gather First n Terms" ["l"] groupEquivInput guiGroupEquiv (reqs,lp)
                       , groupEquivButton "Gather Last n Terms" ["r"] groupEquivInput guiGroupEquiv (reqs,lp)
                       , groupEquivButton "Split at nth Term" ["s"] groupEquivInput guiGroupEquiv (reqs,lp)]
+    hypothesisList  = [ element hypothesisInput, element hypothesisButton ]
     cloneList       = [ element cloneInput, element cloneButton ]
     equivaleList    = [ element equivaleInput, element equivaleButton ]
     quitBtnList     = [ element quitButton, element saveButton ]
 
     -- container divs for the buttons
+    -- note that all "overlay" divs in this list must be included in "proverBoxes"
     buttonBox     = UI.div #. "proverButtonBox" #+ ctrlBtnList
     showBtnBox    = mkPOverlayDiv "showBtnBox" "Show Context" showBtnList
+    downBox       = mkPOverlayDiv "downBox" "Down" downList
     tryMatchBox   = mkPOverlayDiv "tryMatchBox" "Try Match Focus" tryMatchList
+    applyMatchBox = mkPOverlayDiv "applyMatchBox" "Apply Match" applyMatchList
     matchLawBox   = mkPOverlayDiv "matchLawBox" "Match Law" matchLawList
     groupEquivBox = mkPOverlayDiv "groupEquivBox" "Group Equivalences" groupEquivList
+    hypothesisBox = mkPOverlayDiv "hypothesisBox" "To Hypothesis" hypothesisList
     cloneBox      = mkPOverlayDiv "cloneBox" "Clone Hypotheses" cloneList
     equivaleBox   = mkPOverlayDiv "equivaleBox" "Equivale Theorem" equivaleList
     quitBtnBox    = mkPOverlayDiv "quitBtnBox" "Quit" quitBtnList
 
   controlBox <- mkOutput reqs []
-    #+  [ showBtnBox, tryMatchBox, matchLawBox, groupEquivBox
-        , cloneBox, equivaleBox, quitBtnBox ]
+    #+  [ showBtnBox, downBox, tryMatchBox, applyMatchBox
+        , matchLawBox, groupEquivBox, hypothesisBox, cloneBox
+        , equivaleBox, quitBtnBox ]
 
   -- container holding everything together
   proverContainer <- UI.div #. "mainContainer" #+ [element controlBox, buttonBox]
@@ -378,11 +441,11 @@ mkOutput reqs prevOutput = do
 \subsection{Serving Text}
 Since we have created a source from which all output comes, specific output
 can be arbitrarily appended at any time. This is the most basic point of entry
-for generic text output.
+for output.
 \begin{code}
 -- executing a string in JS that was put together in Haskell to modify the HTML DOM
-appendHTML :: [String] -> UI ()
-appendHTML output = execJS $ createJS False output
+pushOutput :: [String] -> UI ()
+pushOutput output = execJS $ createJS False output
 \end{code}
 
 \subsection{Buttons and a Div}
@@ -417,7 +480,7 @@ toggleSetting _label (_cmd,_bool) reqs = do
   else (return btn) # set text ("Show " ++ _label)
   on UI.click btn $ \_ -> do
     reqs1 <- modifySettings [_cmd,show (not _bool)] reqs
-    _ <- guiShow reqs1 ["Set 'Hide " ++ _label ++ "' to " ++ show (not _bool)]
+    pushOutput ["Set 'Hide " ++ _label ++ "' to " ++ show (not _bool)]
     reloadInterface (reqs1, Nothing)
   return btn
 
@@ -471,9 +534,7 @@ liveproofButton _label _func (reqs,lp) = do
   on UI.click btn $ \_ -> do
     case _func lp of
       Just lp1  -> reloadInterface (reqs, Just lp1)
-      Nothing   -> do
-        appendHTML [_label ++ " returned Nothing."]
-        execJS $ hideJS proverBoxes ""
+      Nothing   -> execJS $ hideJS proverBoxes ""
   return btn
 
 -- gets an input to modify the LiveProof in some fashion
@@ -485,9 +546,7 @@ liveproofInputButton _label arg _func (reqs,lp) = do
   on UI.click btn $ \_ -> do
     case _func num lp of
       Just lp1  -> reloadInterface (reqs, Just lp1)
-      Nothing   -> do
-        appendHTML [_label ++ " returned Nothing."]
-        execJS $ hideJS proverBoxes ""
+      Nothing   -> execJS $ hideJS proverBoxes ""
   return btn
   where num = read arg :: Int
 
@@ -504,7 +563,19 @@ liveproofArgButton _label args reload _func (reqs,lp) = do
     else execJS $ hideJS proverBoxes ""
   return btn
 
--- special button to handle the groupEquiv functions
+-- unique button to handle the apply match functions
+applyMatchButton :: String -> Int
+  -> (Int -> (REqState, LiveProof) -> UI (REqState, LiveProof))
+  -> (REqState, LiveProof) -> UI Element
+applyMatchButton _label arg _func (reqs,lp) = do
+  btn <- UI.button #. "button" # set text _label
+  on UI.click btn $ \_ -> do
+    (reqs1,lp1) <- _func arg (reqs,lp)
+    reloadInterface (reqs1, Just lp1)
+    execJS $ hideJS proverBoxes ""
+  return btn
+
+-- unique button to handle the group equivalence functions
 groupEquivButton :: String -> [String] -> Element
   -> ([String] -> (REqState, LiveProof) -> Maybe LiveProof)
   -> (REqState, LiveProof) -> UI Element
@@ -514,9 +585,7 @@ groupEquivButton _label args _input _func (reqs,lp) = do
   on UI.click btn $ \_ -> do
     case _func (args++[_value]) (reqs,lp) of
       Just lp1  -> reloadInterface (reqs, Just lp1)
-      Nothing   -> do
-        appendHTML ["Group Equivalences returned Nothing"]
-        execJS $ hideJS proverBoxes ""
+      Nothing   -> execJS $ hideJS proverBoxes ""
   return btn
 
 -- useful buttons with specific, limited functionality
@@ -540,17 +609,16 @@ mkPOverlayDiv identity _title btns =
 \subsection{AbstractUI Primary Interactions}
 
 These functions are remarkably similar to the REPL functions, the key
-difference being the indentation and the use of the UI monad and the
-changes made to accomodate it.
+difference being  the use of the UI monad and the changes made to accomodate it.
 \begin{code}
 guiShow :: REqState -> [String] -> UI (REqState)
-guiShow reqs output = appendHTML output >> return reqs
+guiShow reqs output = pushOutput output >> return reqs
 
 guiSetTheory ::  String -> REqState -> UI REqState
 guiSetTheory theory reqs =
   case setCurrentTheory theory reqs of
-    Nothing     ->  guiShow reqs  ["No such theory: '"    ++ theory ++ "'"]
-    Just reqs'  ->  guiShow reqs' ["Current Theory now '" ++ theory ++ "'"]
+    Nothing     -> guiShow reqs  ["No such theory: '"    ++ theory ++ "'"]
+    Just reqs1  -> guiShow reqs1 ["Current Theory now '" ++ theory ++ "'"]
 
 guiNewConj :: String -> String -> REqState -> UI REqState
 guiNewConj _name terms reqs = do 
@@ -560,7 +628,7 @@ guiNewConj _name terms reqs = do
       asn' <- mkAsn term scTrue
       case newConjecture (currTheory reqs) (_name,asn') reqs of
         But msgs  -> guiShow reqs msgs
-        Yes reqs' -> guiShow reqs' ["Conjecture '"++_name++"' installed"]
+        Yes reqs1 -> guiShow reqs1 ["Conjecture '"++_name++"' installed"]
 
 guiNewProof1 :: Int -> REqState -> UI (NmdAssertion, [(String, Sequent)])
 guiNewProof1 arg reqs = do
@@ -611,10 +679,9 @@ guiForceLoad :: String -> REqState -> UI REqState
 guiForceLoad theory reqs = do
   let dirfp = projectDir reqs
   (nm,thry,output) <- liftIO $ readNamedTheory dirfp theory
-  _ <- guiShow reqs $ output
-    ++ ["Theory '" ++ nm ++ "'read from  '" ++ dirfp ++ "'."]
+  pushOutput $ output ++ ["Theory '" ++ nm ++ "'read from  '" ++ dirfp ++ "'."]
   case addTheory thry $ theories reqs of
-    Yes thrys'  -> return $ changed $ theories_ thrys' reqs
+    Yes thrys1  -> return $ changed $ theories_ thrys1 reqs
     But msgs    -> guiShow reqs $ ["Add theory failed:"] ++ msgs
 
 guiSaveConj :: REqState -> UI [String]
@@ -630,14 +697,14 @@ guiSaveConj reqs =
 guiAssume :: String -> REqState -> UI REqState
 guiAssume conj reqs =
   case assumeConjecture (currTheory reqs) conj reqs of
-    But lns   ->  guiShow reqs  lns
-    Yes reqs' ->  guiShow reqs' ["Assumed " ++ conj]
+    But lns   -> guiShow reqs  lns
+    Yes reqs' -> guiShow reqs' ["Assumed " ++ conj]
 
 guiDemote :: String -> REqState -> UI REqState
 guiDemote law reqs =
   case demoteLaw (currTheory reqs) law reqs of
-    But lns    ->  guiShow reqs  lns
-    Yes reqs'  ->  guiShow reqs' ["Demoted " ++ law]
+    But lns    -> guiShow reqs  lns
+    Yes reqs'  -> guiShow reqs' ["Demoted " ++ law]
 
 guiInstall :: String -> REqState -> UI REqState
 guiInstall theory reqs =
@@ -698,24 +765,64 @@ guiQuit reqs
 \subsection{AbstractUI Prover Interactions}
 \begin{code}
 guiProverText :: LiveProof -> JavaScript
-guiProverText lp = gapBrackets $ colourJS proverText
-  where proverText = cleanANSI $ eliminateSChar $ unlines $ observeProver lp
+guiProverText lp = gapBrackets $ createJS True $ cleanANSI $ observeProver lp
 
-guiMatchLaw :: [String] -> (REqState, LiveProof) -> UI (REqState, LiveProof)
-guiMatchLaw [] (reqs,lp) = return (reqs, matchFocus (logicsig reqs) ranking lp)
+-- currently not fully implemented due to sequential nature of operation
+guiApplyMatch :: Int -> (REqState,LiveProof) -> UI (REqState, LiveProof)
+guiApplyMatch arg (reqs, lp)
+  = case applyMatchToFocus1 arg lp of
+      Nothing -> return (reqs, lp)
+      Just (fStdVars,fLstVars,gLstVars,gSubTerms,mtch)
+       -> do let availTerms = false : true : gSubTerms
+             mtch'   <-  fixFloatVars  mtch  availTerms fStdVars
+             mtch''  <-  fixFloatLVars mtch' gLstVars   fLstVars
+             case applyMatchToFocus3 mtch'' S.empty emptyBinding lp of
+               Yes lp1  -> return (reqs, lp1)
+               But msgs -> return (reqs, lp)
+  where
+    true  = theTrue  $ logicsig reqs
+    false = theFalse $ logicsig reqs
+
+    fixFloatVars mtch _ []  = return mtch
+    fixFloatVars mtch gterms@[term] ((StdVar v):stdvars)
+      = do mtch' <- applyMatchToFocus2Std v term mtch
+           fixFloatVars mtch' gterms stdvars
+    fixFloatVars mtch gterms ((StdVar v):stdvars)
+      = do (chosen,term) <- return (False, error "unimplemented")
+        -- term to replace: (trVar v) || show terms: (trTerm 0) || list of terms: gterms
+           mtch' <- if chosen
+                    then applyMatchToFocus2Std v term mtch
+                    else return mtch
+           fixFloatVars mtch' gterms stdvars
+
+    fixFloatLVars mtch gvars []  = return mtch
+    fixFloatLVars mtch gvars@[var] ((LstVar lv):lstvars)
+      = do mtch' <- applyMatchToFocus2Lst lv [var] mtch
+           fixFloatLVars mtch' gvars lstvars
+    fixFloatLVars mtch gvars ((LstVar lv):lstvars)
+      = do (chosen,vl) <- return (False, error "unimplemented")
+        -- term to replace: (trLVar lv) || show terms: trGVar || list of terms: gvars
+           mtch' <- if chosen
+                    then applyMatchToFocus2Lst lv vl mtch
+                    else return mtch
+           fixFloatLVars mtch' gvars lstvars
+
+-- uses a Maybe to handle failures in the interface rather than in this function
+guiMatchLaw :: [String] -> (REqState, LiveProof) -> UI (Maybe REqState, LiveProof)
+guiMatchLaw [] (reqs,lp) = return (Just reqs, matchFocus (logicsig reqs) ranking lp)
   where ranking = filterAndSort (matchFilter $ settings reqs, favourLHSOrd)
 guiMatchLaw args (reqs,lp) = 
-  case matchFocusAgainst (head args) (logicsig reqs) lp of
-    Yes lp1   -> return (reqs, lp1)
-    But msgs  -> do _ <- guiShow reqs msgs
-                    return (reqs, matches_ [] lp)
+  case matchFocusAgainst lawnm (logicsig reqs) lp of
+    Yes lp1 -> return (Just reqs, lp1)
+    But _   -> return (Nothing, matches_ [] lp)
+  where lawnm = filter (not . isSpace) $ unwords args
 
 -- currently does not implement the remainder of the args, ie. list of parts
 guiTryMatch :: [String] -> (REqState, LiveProof) -> UI (REqState, LiveProof)
 guiTryMatch args (reqs, lp) = do
-  _ <- case tryFocusAgainst _law parts (logicsig reqs) lp of
+  _ <- case tryFocusAgainst lawnm parts (logicsig reqs) lp of
     Yes (bind,tPasC,scC',scP')
-      -> guiShow reqs
+      -> pushOutput $ map gapBrackets
           [ banner
           , "Binding: " ++ trBinding bind
           -- , "Replacement: " ++ trTerm 0 repl
@@ -724,22 +831,23 @@ guiTryMatch args (reqs, lp) = do
           , "Instantiated Law S.C. = " ++ trSideCond scP'
           , "Goal S.C. = " ++ trSideCond (conjSC lp)
           , "Discharged Law S.C. = " ++ trSideCond scP']
-    But msgs -> guiShow reqs $ (banner ++ " failed!") : msgs
+    But msgs -> pushOutput $ map gapBrackets $ (banner ++ " failed!") : msgs
   return (reqs,lp)
     where
-      _law    = head args
-      parts   = map (\x -> read x :: Int) $ tail args
-      banner = "Match against `" ++ _law ++ "'" ++ show parts
+      (nums,rest) = span (all isDigit) args
+      parts = map read nums
+      lawnm = filter (not . isSpace) $ unwords rest
+      banner = "Match against `" ++ lawnm ++ "'" ++ show parts
 
 guiNormQuant :: [String] -> (REqState, LiveProof) -> UI (REqState, LiveProof)
 guiNormQuant [] (reqs,lp) = do
-  guiShow reqs ["Currently broken"]
+  pushOutput ["Currently broken"]
   return (reqs,lp)
 guiNormQuant _ (reqs, lp) =
   case normQuantFocus (theories reqs) lp of
     Yes lp1   -> return (reqs, lp1)
     But msgs  -> do
-        guiShow reqs msgs
+        pushOutput msgs
         return (reqs, matches_ [] lp)
 
 guiSimpNest :: [String] -> (REqState, LiveProof) -> UI (REqState, LiveProof)
@@ -747,7 +855,7 @@ guiSimpNest _ (reqs, lp) =
   case nestSimpFocus (theories reqs) lp of
     Yes lp1  ->  return (reqs, lp1)
     But msgs -> do
-      guiShow reqs msgs
+      pushOutput msgs
       return (reqs, matches_ [] lp)
 
 guiSubstitute :: [String] -> (REqState, LiveProof) -> UI (REqState, LiveProof)
@@ -755,7 +863,7 @@ guiSubstitute _ (reqs, lp) =
   case substituteFocus (theories reqs) lp of
     Yes lp1  ->  return (reqs, lp1)
     But msgs -> do
-      guiShow reqs msgs
+      pushOutput msgs
       return (reqs, matches_ [] lp)
 
 guiFlatEquiv :: (REqState, LiveProof) -> Maybe LiveProof
@@ -817,11 +925,11 @@ badQuoteSeparator _input  = map (\x -> head $ splitOn "”" x)
 
 -- parses live proofs using the standard indentation and inclusion of '@'
 parseProofs :: [String] -> [String]
-parseProofs proofs  = map (\(_:_:xs) -> trim $ head $ splitOn "@" xs)
-                      $ map trim $ tail proofs
+parseProofs _proofs = map (\(_:_:xs) -> trim $ head $ splitOn "@" xs)
+                      $ map trim $ tail _proofs
 
--- [] stlye brackets don't show a gap in the GUI, so we add one
-gapBrackets :: JavaScript -> JavaScript
+-- [] stlye brackets don't show a gap with most fonts, so we add one
+gapBrackets :: String -> String
 gapBrackets js = intercalate "[ ]" $ splitOn "[]" js
 
 -- parses the laws for the prover state using the '---' delimiter and 'bad' quotes
@@ -840,16 +948,25 @@ parseMatchLaws _laws = map (!!3) fixed_laws
 
 Various variables that are here to de-clutter
 \begin{code}
+-- synonym for cleaner JavaScript execution (these two functions always operate sequentially)
 execJS _code = runFunction $ ffi _code
 
+-- these two lists are important to application functionality
+-- both lists must contain a list of all "overlay" divs, and only "overlay" divs
+-- several buttons perform a JavaScript action changing the display value of these divs
+-- if a div is not included it will never be hidden, and invalid entries will cause crashes
 reqBoxes    = [ "showBtnBox", "setTheoryBox", "newConjBox", "newProofBox"
               , "returnBox", "saveBox", "loadBox","loadTBox"
               , "loadNewTBox", "loadConjBox", "assumeBox", "demoteBox"
               , "builtinBox", "installTBox", "resetTBox", "updateTBox"
               , "fUpdateTBox", "sequentBox", "settingsBox" ]
+proverBoxes = ["showBtnBox", "downBox", "matchLawBox", "tryMatchBox"
+              , "applyMatchBox", "groupEquivBox", "hypothesisBox", "cloneBox"
+              , "equivaleBox", "quitBtnBox"]
 
-proverBoxes = ["showBtnBox", "matchLawBox", "tryMatchBox","groupEquivBox"
-              , "cloneBox", "equivaleBox", "quitBtnBox"]
-
+-- customising the port should be done before the initial call of runServ
 customConfig port = UI.defaultConfig {jsPort = Just port, jsStatic = Just "./static"}
+
+-- coloured error string
+_error = "#£ff0000#<Error>#£col# "
 \end{code}

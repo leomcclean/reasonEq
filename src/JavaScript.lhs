@@ -7,8 +7,7 @@ LICENSE: BSD3, see file LICENSE at reasonEq root
 \begin{code}
 module JavaScript
 ( JavaScript
-, createJS, colourJS
-, eliminateSChar
+, createJS
 , htmlBr, autoScroll, setPlaceholder
 , showOneEle, displayJS, hideJS
 , clearOutput
@@ -29,18 +28,23 @@ type Colour = String
 
 -- top level function that creates a series of JS statements to manipulate the HTML DOM
 createJS :: Bool -> [String] ->JavaScript
-createJS br s = if br then result ++ htmlBr else result
-  where base    = concat $ map appendOutput $ eliminateSChar $ unlines s 
-        result  = base ++ autoScroll
+createJS br s = if "#£col#" `isInfixOf` initial
+                then case br of
+                  True  -> addbr $ result $ colourJS _split
+                  False -> result $ colourJS _split
+                else case br of
+                  True  -> addbr $ result $ concat $ map appendOutput _split
+                  False -> result $ concat $ map appendOutput _split
+  where initial   = eliminateSChar $ unlines s
+        _split    = splitOn "\n" initial
+        result x  = x ++ autoScroll
+        addbr x   = x ++ htmlBr
 
 -- delimit a string on newline (\n) and tab (\t) characters
 -- also clean the array of empty ("") entries
 -- can clean up specific arrays on a case by case basis later
-eliminateSChar :: String -> [String]
-eliminateSChar s  = map filterQuotes
-                  $ filter (\x -> x/="")
-                  $ splitOn "\n"
-                  $ filter (/='\t') s
+eliminateSChar :: String -> String
+eliminateSChar s  = filterQuotes $ filter (/='\t') s
 
 -- filters the three kinds of quotes that ruin JavaScript
 filterQuotes :: String -> String
