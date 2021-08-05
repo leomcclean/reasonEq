@@ -262,7 +262,7 @@ mkProofInterface (reqs,lp) = do
     case readMaybe _value :: Maybe Int of
       Just num  ->  case moveFocusDown num lp of
                       Just lp1  -> reloadInterface (reqs,Just lp1)
-                      Nothing   -> pushOutput [_error ++ "Invalid step down."]
+                      Nothing   -> return ()
       Nothing   ->  pushOutput [_error ++ "Input must be an integer."]
 
   matchAllLawsButton <- UI.button #. "button" # set text "Match Law"
@@ -293,7 +293,7 @@ mkProofInterface (reqs,lp) = do
       Just lp1  -> reloadInterface (reqs, Just lp1)
       Nothing   -> return ()
 
-  hypothesisButton <- UI.button #. "button" # set text "Down"
+  hypothesisButton <- UI.button #. "button" # set text "To Hypothesis"
   on UI.click hypothesisButton $ \_ -> do
     _value <- hypothesisInput # get value
     case readMaybe _value :: Maybe Int of
@@ -382,7 +382,7 @@ mkProofInterface (reqs,lp) = do
                       then  ( map (\x -> applyMatchButton ("Match Law #'" ++ x ++ "'") (read x)
                               guiApplyMatch (reqs,lp)) $ numlist topend)
                       else  []
-                      where topend  = (length $ parseMatchLaws $ observeCurrentMatches lp) - 1
+                      where topend  = (length $ splitOn "\n" $ observeCurrentMatches lp) - 1
                             numlist x = map show [x, x-1..1]
     matchLawList    = [ element matchAllLawsButton, blankButton, element matchLawInput, element matchLawButton]
     tryMatchList    = map (\x -> liveproofArgButton ("Try '" ++ x ++ "'") [x]
@@ -788,7 +788,7 @@ guiApplyMatch arg (reqs, lp)
       = do mtch' <- applyMatchToFocus2Std v term mtch
            fixFloatVars mtch' gterms stdvars
     fixFloatVars mtch gterms ((StdVar v):stdvars)
-      = do (chosen,term) <- return (False, error "unimplemented")
+      = do (chosen,term) <- return (False, error "fixFloatVars unimplemented")
         -- term to replace: (trVar v) || show terms: (trTerm 0) || list of terms: gterms
            mtch' <- if chosen
                     then applyMatchToFocus2Std v term mtch
@@ -800,7 +800,7 @@ guiApplyMatch arg (reqs, lp)
       = do mtch' <- applyMatchToFocus2Lst lv [var] mtch
            fixFloatLVars mtch' gvars lstvars
     fixFloatLVars mtch gvars ((LstVar lv):lstvars)
-      = do (chosen,vl) <- return (False, error "unimplemented")
+      = do (chosen,vl) <- return (False, error "fixFloatLVars unimplemented")
         -- term to replace: (trLVar lv) || show terms: trGVar || list of terms: gvars
            mtch' <- if chosen
                     then applyMatchToFocus2Lst lv vl mtch
@@ -936,12 +936,6 @@ gapBrackets js = intercalate "[ ]" $ splitOn "[]" js
 pparseLaws :: String -> [String]
 pparseLaws _laws = concat $ map badQuoteSeparator $ splitOn "\n" thryLists
   where thryLists = concat $ map tail $ splitOn "---" _laws
-
--- /remove/
--- parses the 'match' laws for the prover state using the terminal colour codes
-parseMatchLaws :: String -> [String]
-parseMatchLaws _laws = map (!!3) fixed_laws
-  where fixed_laws = map (splitOn "#") $ cleanANSI $ splitOn "\n" _laws
 \end{code}
 
 \subsection{Various Variables}

@@ -760,9 +760,9 @@ removeOtherANSIr (x:xs) text  = if x `isInfixOf` text
   where fixed_text = fixOther $ splitOn x text
 
 -- remove matching instance of ANSI end code
--- z accounts for the possiblity for a beginning end code
 fixOther :: [String] -> String
 fixOther (x:y:xs) = concat [x, removeNextEndTag y, fixOther xs]
+fixOther [x]      = x
 fixOther []       = ""
 
 removeNextEndTag ('[':'0':'m':xs) = xs
