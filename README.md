@@ -33,12 +33,6 @@ See <https://docs.haskellstack.org/en/stable/README/>. You are strongly advised 
 
 4. Compile the executable file using the command `npm run pack-app`.
 
-#### Important note on Windows usage
-
-A dependency, `posix-regex`, currently requires an extra flag to be installed by stack on Windows.
-This flag cannot be included in a linux or macOS installation as it does not exist for the library in those OSs.
-To compile on Windows, you must use `cabal install regex-posix -f _regex-posix-clib` or otherwise amend the .cabal file to correctly install the dependency.
-
 ## Running `reasonEq`/`req`
 
 For new users, we recommend the following procedure:
